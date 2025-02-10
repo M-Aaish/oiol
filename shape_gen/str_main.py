@@ -229,5 +229,5 @@ def main():
     elif app_mode == "Oil Painting Generator":
         oil_painting_page()
 
-if _name_ == "_main_":
+if __name__ == "__main__":
     main()
