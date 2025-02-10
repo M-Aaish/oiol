@@ -67,7 +67,7 @@ def main():
                 label="Download Processed Image",
                 data=img_byte_arr,
                 file_name="processed_image.png",
-                mime="image/png
+                mime="image/png"
             )
 
 if __name__ == "__main__":
