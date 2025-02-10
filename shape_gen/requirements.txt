@@ -2,3 +2,4 @@ streamlit
 pillow
 numpy
 opencv-python-headless
+threadpool
