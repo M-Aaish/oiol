@@ -10,7 +10,7 @@ brushes = {}
 
 # load brushes from ./brushes directory
 def load_brushes():
-    brush_dir = './brushes/'
+    brush_dir = './shape_gen/brushes/'
     import os
     for fn in os.listdir(brush_dir):
         if os.path.isfile(brush_dir + fn):
