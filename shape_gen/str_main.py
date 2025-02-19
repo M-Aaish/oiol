@@ -6,6 +6,7 @@ import cv2
 from EnDe import decode, encode
 from painterfun import oil_main  # Importing the oil_main function
 import mixbox  
+
 # Function to calculate the Euclidean distance between two RGB colors
 def color_distance(color1, color2):
     return np.sqrt(np.sum((np.array(color1) - np.array(color2)) ** 2))
@@ -53,9 +54,6 @@ def oil_painting_page():
         else:
             st.write("Upload an image to see it here")
 
-    # Show an empty placeholder for the output image in the second column
-
-
     # A button to trigger the oil painting generation
     if st.button("Generate"):
         if uploaded_file is not None:
@@ -82,7 +80,7 @@ def oil_painting_page():
 
             # Show the processed image in the second column
             with col2:
-                st.image(output_image, caption="Processed Image", use_column_width=True)
+                st.image(output_image, caption="Processed Image", use_container_width=True)
 
             # Convert the processed image to bytes for downloading
             img_byte_arr = BytesIO()
@@ -96,6 +94,7 @@ def oil_painting_page():
                 file_name="processed_image.png",
                 mime="image/png"
             )
+
 def color_mixing_app():
     st.title("RGB Color Mixing")
 
@@ -165,14 +164,24 @@ def color_mixing_app():
     st.subheader("Mixed Color")
     st.write(f"RGB: {mixed_rgb}")
     st.markdown(f"<div style='width: 200px; height: 200px; background-color: rgb{mixed_rgb};'></div>", unsafe_allow_html=True)
-  
+
 def main():
     # Streamlit app layout
     st.set_page_config(page_title="Image Generator, Shape Detector, & Oil Painting", layout="wide")
 
     # Sidebar with page selection
     st.sidebar.title("Options")
-    app_mode = st.sidebar.radio("Select Mode", ["Image Generator", "Shape Detector", "Oil Painting Generator" , "Colour Merger"])
+    app_mode = st.sidebar.radio(
+        "Select Mode",
+        [
+            "Image Generator", 
+            "Shape Detector", 
+            "Oil Painting Generator", 
+            "Colour Merger",
+            "Recipe Generator",
+            "Color DataBase"
+        ]
+    )
 
     if app_mode == "Image Generator":
         st.header("Image Generator")
@@ -195,7 +204,6 @@ def main():
             else:
                 # Convert uploaded image to RGB
                 img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
                 # Display uploaded image in the left column
                 with col1:
                     st.image(img_rgb, caption="Uploaded Image", use_container_width=True)
@@ -205,14 +213,11 @@ def main():
             if uploaded_file is not None:
                 shape = shape_option  # encode handles shape conversion internally
                 # Pass the new parameters (num_shapes and shape_size) to encode
-                encoded_image, boundaries = encode(img, shape, output_path="",
-                                                   num_shapes=num_shapes, shape_size=shape_size)
+                encoded_image, boundaries = encode(img, shape, output_path="", num_shapes=num_shapes, shape_size=shape_size)
                 encoded_image_rgb = cv2.cvtColor(encoded_image, cv2.COLOR_BGR2RGB)
-
                 # Display the encoded image in the second column
                 with col2:
                     st.image(encoded_image_rgb, caption=f"Encoded {shape_option} Image", use_container_width=True)
-
                 # Provide the download button for encoded image
                 is_success, buffer = cv2.imencode(".png", encoded_image)
                 if is_success:
@@ -242,7 +247,6 @@ def main():
             else:
                 # Convert uploaded encoded image to RGB
                 encoded_image_rgb = cv2.cvtColor(encoded_image, cv2.COLOR_BGR2RGB)
-
                 # Display uploaded encoded image in the left column
                 with col1:
                     st.image(encoded_image_rgb, caption="Uploaded Encoded Image", use_container_width=True)
@@ -267,18 +271,10 @@ def main():
 
                 # Show grouped colors with RGB and count in 3 columns
                 st.subheader("Grouped Colors (Ranked by Count)")
-
-                # Create 3 columns to display the colors in a row-wise fashion
                 col1, col2, col3 = st.columns(3)
-
-                # Loop through the colors and display them across the columns
                 for idx, (color, count) in enumerate(grouped_colors):
                     rgb_str = f"RGB: {color} - Count: {count}"
-
-                    # Choose the column based on the index
                     color_box = f"background-color: rgb({color[0]}, {color[1]}, {color[2]}); height: 30px; width: 30px; margin-right: 10px; display: inline-block;"
-
-                    # Determine which column to display the color in
                     if idx % 3 == 0:
                         with col1:
                             st.markdown(f"<div style='{color_box}'></div> {rgb_str}", unsafe_allow_html=True)
@@ -303,8 +299,19 @@ def main():
 
     elif app_mode == "Oil Painting Generator":
         oil_painting_page()
+
     elif app_mode == "Colour Merger":
         color_mixing_app()
+
+    # -----------------------------
+    # New Modes: Recipe Generator and Color DataBase
+    # -----------------------------
+    elif app_mode == "Recipe Generator":
+        import painter2
+        painter2.main()
+    elif app_mode == "Color DataBase":
+        import painter2
+        painter2.main()
 
 if __name__ == "__main__":
     main()
