@@ -4,7 +4,7 @@ import math
 import numpy as np
 import os
 
-# Only set page config if this file is run as the main script.
+# Set page config only when this file is run directly.
 if __name__ == '__main__':
     st.set_page_config(page_title="Painter App", layout="wide")
 
@@ -388,7 +388,6 @@ def main():
         num_shapes = st.number_input("Enter the number of shapes to encode:", min_value=1, value=10)
         shape_size = st.number_input("Enter the size of the shape:", min_value=1, value=10)
         # -----------------------------------------------------
-
         col1, col2 = st.columns([1, 1])
         if uploaded_file is not None:
             file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
