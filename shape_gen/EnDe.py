@@ -93,9 +93,12 @@ def encode(input_image, shape_type, output_path, **kwargs):
             if len(grid_points) < (num_triangles + 2):
                 extra_points = np.array([[random.randint(0, w_pad), random.randint(0, h_pad)] 
                                            for _ in range(num_triangles + 2 - len(grid_points))])
-                points = np.concatenate([grid_points, extra_points], axis=0)
+                all_points = np.concatenate([grid_points, extra_points], axis=0)
             else:
-                points = grid_points[:num_triangles+2]
+                all_points = grid_points
+            # Randomly sample (num_triangles+2) points to avoid a collinear subset
+            indices = np.random.choice(len(all_points), num_triangles + 2, replace=False)
+            points = all_points[indices]
         else:
             points = np.array([[random.randint(0, w_pad), random.randint(0, h_pad)] 
                            for _ in range(num_triangles + 2)])
