@@ -85,10 +85,11 @@ def encode(input_image, shape_type, output_path, **kwargs):
         num_triangles = kwargs.get('num_triangles', kwargs.get('num_shapes', 510))
         shape_size = kwargs.get('shape_size', None)
         if shape_size is not None:
-            # Create grid points with spacing equal to shape_size
+            # Create grid points with spacing equal to shape_size using a standard approach
             x_coords = np.arange(0, w_pad, shape_size)
             y_coords = np.arange(0, h_pad, shape_size)
-            grid_points = np.array(np.meshgrid(x_coords, y_coords)).T.reshape(-1, 2)
+            xx, yy = np.meshgrid(x_coords, y_coords)
+            grid_points = np.vstack([xx.ravel(), yy.ravel()]).T
             if len(grid_points) < (num_triangles + 2):
                 extra_points = np.array([[random.randint(0, w_pad), random.randint(0, h_pad)] 
                                            for _ in range(num_triangles + 2 - len(grid_points))])
