@@ -178,6 +178,10 @@ def main():
         st.header("Image Generator")
         uploaded_file = st.file_uploader("Upload an Image", type=["jpg", "jpeg", "png"])
         shape_option = st.selectbox("Select Shape", ["Triangle", "Rectangle", "Circle"])
+        # --- New options for number and size of shapes ---
+        num_shapes = st.number_input("Enter the number of shapes to encode:", min_value=1, value=10)
+        shape_size = st.number_input("Enter the size of the shape:", min_value=1, value=10)
+        # -----------------------------------------------------
 
         # Create two columns
         col1, col2 = st.columns([1, 1])  # This creates two equal-width columns
@@ -200,7 +204,9 @@ def main():
         if st.button("Generate"):
             if uploaded_file is not None:
                 shape = shape_option  # encode handles shape conversion internally
-                encoded_image, boundaries = encode(img, shape, output_path="")  # encoded image and boundaries
+                # Pass the new parameters (num_shapes and shape_size) to encode
+                encoded_image, boundaries = encode(img, shape, output_path="",
+                                                   num_shapes=num_shapes, shape_size=shape_size)
                 encoded_image_rgb = cv2.cvtColor(encoded_image, cv2.COLOR_BGR2RGB)
 
                 # Display the encoded image in the second column
