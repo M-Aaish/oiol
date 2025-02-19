@@ -81,14 +81,33 @@ def encode(input_image, shape_type, output_path, **kwargs):
         padding = 30
         image_padded = cv2.copyMakeBorder(image_resized, padding, padding, padding, padding, cv2.BORDER_REFLECT)
         h_pad, w_pad, _ = image_padded.shape
-        num_triangles = kwargs.get('num_triangles', 510)
-        num_points = num_triangles + 2
-        points = np.array([[random.randint(0, w_pad), random.randint(0, h_pad)] 
-                           for _ in range(num_points)])
+        # Use num_shapes (or num_triangles) from kwargs if provided
+        num_triangles = kwargs.get('num_triangles', kwargs.get('num_shapes', 510))
+        shape_size = kwargs.get('shape_size', None)
+        if shape_size is not None:
+            # Create grid points with spacing equal to shape_size
+            x_coords = np.arange(0, w_pad, shape_size)
+            y_coords = np.arange(0, h_pad, shape_size)
+            grid_points = np.array(np.meshgrid(x_coords, y_coords)).T.reshape(-1, 2)
+            if len(grid_points) < (num_triangles + 2):
+                extra_points = np.array([[random.randint(0, w_pad), random.randint(0, h_pad)] 
+                                           for _ in range(num_triangles + 2 - len(grid_points))])
+                points = np.concatenate([grid_points, extra_points], axis=0)
+            else:
+                points = grid_points[:num_triangles+2]
+        else:
+            points = np.array([[random.randint(0, w_pad), random.randint(0, h_pad)] 
+                           for _ in range(num_triangles + 2)])
         tri = Delaunay(points)
+        # Limit the number of triangles if num_shapes is provided
+        user_num = kwargs.get('num_shapes', None)
+        if user_num is not None:
+            tri_simplices = tri.simplices[:user_num]
+        else:
+            tri_simplices = tri.simplices
         overlay_img = image_resized.copy()
         boundaries = []
-        for simplex in tri.simplices:
+        for simplex in tri_simplices:
             triangle_points = points[simplex]
             triangle_pts_no_padding = triangle_points - [padding, padding]
             boundaries.append(triangle_pts_no_padding)
@@ -113,10 +132,15 @@ def encode(input_image, shape_type, output_path, **kwargs):
         failed_attempts = 0
         max_attempts = kwargs.get('max_attempts', 500000)
         max_fail_attempts = kwargs.get('max_fail_attempts', 10000)
-        max_rectangles_limit = kwargs.get('max_rectangles_limit', 653)
-        min_size = kwargs.get('min_size', (5, 5))
-        max_size = kwargs.get('max_size', (10, 10))
-        while attempts < max_attempts and failed_attempts < max_fail_attempts and len(boundaries) < max_rectangles_limit:
+        # Use num_shapes for rectangle count if provided
+        num_rectangles = kwargs.get('num_shapes', 653)
+        if 'shape_size' in kwargs:
+            min_size = (kwargs['shape_size'], kwargs['shape_size'])
+            max_size = (kwargs['shape_size'], kwargs['shape_size'])
+        else:
+            min_size = kwargs.get('min_size', (5, 5))
+            max_size = kwargs.get('max_size', (10, 10))
+        while attempts < max_attempts and failed_attempts < max_fail_attempts and len(boundaries) < num_rectangles:
             used_space = sum([rw * rh for (_, _, rw, rh) in boundaries])
             total_space = h * w
             remaining_capacity = (total_space - used_space) / total_space
@@ -161,13 +185,21 @@ def encode(input_image, shape_type, output_path, **kwargs):
         image_orig = input_image
         image_resized = cv2.resize(image_orig, (512, 512))
         h, w, _ = image_resized.shape
-        circle_image, num_circles, circles = generate_max_random_circles(
+        # Use num_shapes for circles if provided
+        num_circles = kwargs.get('num_shapes', kwargs.get('max_circles_limit', 1900))
+        if 'shape_size' in kwargs:
+            min_radius = kwargs['shape_size']
+            max_radius = kwargs['shape_size']
+        else:
+            min_radius = kwargs.get('min_radius', 5)
+            max_radius = kwargs.get('max_radius', 10)
+        circle_image, num_circles_generated, circles = generate_max_random_circles(
             image_size=(h, w),
-            max_circles_limit=kwargs.get('max_circles_limit', 1900),
-            min_radius=kwargs.get('min_radius', 5),
-            max_radius=kwargs.get('max_radius', 10),
             max_attempts=kwargs.get('max_attempts', 10000),
-            max_fail_attempts=kwargs.get('max_fail_attempts', 10000)
+            max_fail_attempts=kwargs.get('max_fail_attempts', 10000),
+            max_circles_limit=num_circles,
+            min_radius=min_radius,
+            max_radius=max_radius
         )
         resized_circle_image = resize_image_to_shape(circle_image, image_resized.shape[:2])
         averaged_circle_image = compute_average_under_circles(image_resized, resized_circle_image, circles)
