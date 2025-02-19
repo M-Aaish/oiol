@@ -172,7 +172,7 @@ def main():
 
     # Sidebar with page selection
     st.sidebar.title("Options")
-    app_mode = st.sidebar.selectbox("Select Mode", ["Image Generator", "Shape Detector", "Oil Painting Generator" , "Colour Merger"])
+    app_mode = st.sidebar.radio("Select Mode", ["Image Generator", "Shape Detector", "Oil Painting Generator" , "Colour Merger"])
 
     if app_mode == "Image Generator":
         st.header("Image Generator")
