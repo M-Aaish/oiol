@@ -85,30 +85,26 @@ def encode(input_image, shape_type, output_path, **kwargs):
         num_triangles = kwargs.get('num_triangles', kwargs.get('num_shapes', 510))
         shape_size = kwargs.get('shape_size', None)
         if shape_size is not None:
-            # Create grid points with spacing equal to shape_size using a standard approach
+            # Generate a full grid of points with spacing equal to shape_size
             x_coords = np.arange(0, w_pad, shape_size)
             y_coords = np.arange(0, h_pad, shape_size)
             xx, yy = np.meshgrid(x_coords, y_coords)
             grid_points = np.vstack([xx.ravel(), yy.ravel()]).T
-            if len(grid_points) < (num_triangles + 2):
-                extra_points = np.array([[random.randint(0, w_pad), random.randint(0, h_pad)] 
-                                           for _ in range(num_triangles + 2 - len(grid_points))])
-                all_points = np.concatenate([grid_points, extra_points], axis=0)
-            else:
-                all_points = grid_points
-            # Randomly sample (num_triangles+2) points to avoid a collinear subset
-            indices = np.random.choice(len(all_points), num_triangles + 2, replace=False)
-            points = all_points[indices]
+            # Add a small jitter to avoid degeneracy
+            jitter = 0.1 * shape_size
+            grid_points = grid_points + np.random.uniform(-jitter, jitter, grid_points.shape)
+            points = grid_points
         else:
             points = np.array([[random.randint(0, w_pad), random.randint(0, h_pad)] 
                            for _ in range(num_triangles + 2)])
         tri = Delaunay(points)
-        # Limit the number of triangles if num_shapes is provided
+        all_triangles = tri.simplices  # All triangles from the triangulation
         user_num = kwargs.get('num_shapes', None)
-        if user_num is not None:
-            tri_simplices = tri.simplices[:user_num]
+        if user_num is not None and user_num < len(all_triangles):
+            indices = np.random.choice(len(all_triangles), user_num, replace=False)
+            tri_simplices = all_triangles[indices]
         else:
-            tri_simplices = tri.simplices
+            tri_simplices = all_triangles
         overlay_img = image_resized.copy()
         boundaries = []
         for simplex in tri_simplices:
