@@ -6,8 +6,12 @@ import os
 
 # Set page config only when this file is run directly.
 if __name__ == '__main__':
-    st.set_page_config(page_title="Painter App", layout="wide")
-
+        st.set_page_config(page_title="Painter App", layout="wide")
+    st.sidebar.title("Options")
+    app_mode = st.sidebar.radio(
+        "Select Mode",
+        ["Recipe Generator", "Color DataBase"]
+    )
 # -----------------------------
 # File name for our color database.
 # -----------------------------
