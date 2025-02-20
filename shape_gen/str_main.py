@@ -1,4 +1,4 @@
-'''import streamlit as st
+import streamlit as st
 from io import BytesIO
 from PIL import Image
 import numpy as np
@@ -654,25 +654,4 @@ def main():
         painter_colors_database()
 
 if __name__ == "__main__":
-    main()'''
-import os
-import streamlit as st
-
-# Build an absolute path for color.txt
-COLOR_DB_FILE = os.path.join(os.path.dirname(__file__), "color.txt")
-
-# Debug: print absolute path and check if the file exists
-abs_path = os.path.join(os.path.dirname(__file__), "color.txt")
-st.write("Looking for color.txt at:", abs_path)
-if not os.path.exists(abs_path):
-    st.error("File not found at the above path!")
-
-@st.cache_data
-def read_color_file(filename=COLOR_DB_FILE):
-    try:
-        with open(filename, "r") as f:
-            return f.read()
-    except Exception as e:
-        st.error("Error reading color.txt: " + str(e))
-        return ""
-
+    main()
