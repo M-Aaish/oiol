@@ -105,7 +105,7 @@ def color_mixing_app():
             r = st.number_input(f"Red value for Color {idx + 1}", min_value=0, max_value=255, value=color['rgb'][0])
             g = st.number_input(f"Green value for Color {idx + 1}", min_value=0, max_value=255, value=color['rgb'][1])
             b = st.number_input(f"Blue value for Color {idx + 1}", min_value=0, max_value=255, value=color['rgb'][2])
-            col_weight = st.slider(f"Weight for Color {idx + 1}", 0.0, 1.0, value=color["weight"], step=0.05)
+            col_weight = st.slider(f"Weight for Color {idx + 1}", 0.0, 1.0, value=color['weight'], step=0.05)
             color["rgb"] = [r, g, b]
             color["weight"] = col_weight
             st.markdown(f"<div style='width: 100px; height: 100px; background-color: rgb({r}, {g}, {b});'></div>", unsafe_allow_html=True)
@@ -210,8 +210,8 @@ def shape_detector_app():
 # --- Functions from painter2.py (Painter App - Recipe Generator and Colors DataBase)
 # --------------------------------------------------------------------
 
-# File name for our color database.
-COLOR_DB_FILE = "shape_gen/color.txt"
+# Fix: Build an absolute path to color.txt (assuming it is in the same directory as this file)
+COLOR_DB_FILE = os.path.join(os.path.dirname(__file__), "color.txt")
 
 @st.cache_data
 def read_color_file(filename=COLOR_DB_FILE):
