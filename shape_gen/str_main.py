@@ -493,21 +493,44 @@ def show_add_colors_page():
 def show_remove_colors_page():
     global databases
     st.title("Colors DataBase - Remove Colors")
-    selected_db = st.selectbox("Select database to remove a color from:", list(databases.keys()))
-    with st.form("remove_color_form"):
-        color_name = st.text_input("Color Name to Remove")
-        submitted = st.form_submit_button("Remove Color")
-        if submitted:
-            if color_name:
-                success = remove_color_from_db(selected_db, color_name)
-                if success:
-                    st.success(f"Color '{color_name}' removed from {selected_db}!")
-                    color_txt = read_color_file(COLOR_DB_FILE)
-                    databases = parse_color_db(color_txt)
-                else:
-                    st.error("Failed to remove color or color not found.")
+    selected_db = st.selectbox("Select a color database:", list(databases.keys()))
+    # Build a dropdown of all color names in the selected database.
+    color_options = [name for name, _ in databases[selected_db]]
+    if not color_options:
+        st.warning("No colors available in the selected database.")
+        return
+    chosen_color = st.selectbox("Select the color to remove:", color_options)
+    if st.button("Remove Color"):
+        success = remove_color_from_db(selected_db, chosen_color)
+        if success:
+            st.success(f"Color '{chosen_color}' removed from {selected_db}!")
+            color_txt = read_color_file(COLOR_DB_FILE)
+            databases = parse_color_db(color_txt)
+        else:
+            st.error("Failed to remove color or color not found.")
+
+
+def show_remove_database_page():
+    global databases
+    st.title("Colors DataBase - Remove Database")
+    # Provide a dropdown listing all available databases.
+    db_options = list(databases.keys())
+    if not db_options:
+        st.warning("No databases available.")
+        return
+    selected_db_to_remove = st.selectbox("Select the database to remove:", db_options)
+    confirm = st.checkbox("I confirm that I want to permanently delete this database.")
+    if st.button("Remove Database"):
+        if selected_db_to_remove and confirm:
+            success = remove_database(selected_db_to_remove)
+            if success:
+                st.success(f"Database '{selected_db_to_remove}' removed!")
+                color_txt = read_color_file(COLOR_DB_FILE)
+                databases = parse_color_db(color_txt)
             else:
-                st.error("Please enter a color name.")
+                st.error("Failed to remove database.")
+        else:
+            st.error("Please select a database and confirm deletion.")
 
 def show_create_custom_db_page():
     global databases
@@ -524,28 +547,6 @@ def show_create_custom_db_page():
                     databases = parse_color_db(color_txt)
                 else:
                     st.error("Failed to create database.")
-            else:
-                st.error("Please enter a database name.")
-
-def show_remove_database_page():
-    global databases
-    st.title("Colors DataBase - Remove Database")
-    with st.form("remove_db_form"):
-        db_name = st.text_input("Enter the name of the database to remove:")
-        submitted = st.form_submit_button("Remove Database")
-        if submitted:
-            if db_name:
-                confirm = st.checkbox("I confirm that I want to permanently delete this database.")
-                if confirm:
-                    success = remove_database(db_name)
-                    if success:
-                        st.success(f"Database '{db_name}' removed!")
-                        color_txt = read_color_file(COLOR_DB_FILE)
-                        databases = parse_color_db(color_txt)
-                    else:
-                        st.error("Failed to remove database.")
-                else:
-                    st.warning("Please check the confirmation box to proceed.")
             else:
                 st.error("Please enter a database name.")
 
