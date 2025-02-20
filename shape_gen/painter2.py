@@ -4,14 +4,9 @@ import math
 import numpy as np
 import os
 
-# Set page config only when this file is run directly.
-if __name__ == '__main__':
-        st.set_page_config(page_title="Painter App", layout="wide")
-    st.sidebar.title("Options")
-    app_mode = st.sidebar.radio(
-        "Select Mode",
-        ["Recipe Generator", "Color DataBase"]
-    )
+# Set page config at the very beginning.
+st.set_page_config(page_title="Painter App", layout="wide")
+
 # -----------------------------
 # File name for our color database.
 # -----------------------------
@@ -31,6 +26,9 @@ def read_color_file(filename=COLOR_DB_FILE):
 
 # -----------------------------
 # Parsing function: Reads the text file and creates a dictionary of databases.
+# File format example:
+#   Artisan - Winsor & Newton
+#   1 Burnt Sienna 58,22,14 1073
 # -----------------------------
 def parse_color_db(txt):
     databases = {}
@@ -39,15 +37,17 @@ def parse_color_db(txt):
         line = line.strip()
         if not line:
             continue
+        # If the line doesn't start with a digit, treat it as a database header.
         if not line[0].isdigit():
             current_db = line
             databases[current_db] = []
         else:
             tokens = line.split()
+            # Expect at least 4 tokens: index, color name, RGB string, density.
             if len(tokens) < 4:
                 continue
             index = tokens[0]
-            rgb_str = tokens[-2]
+            rgb_str = tokens[-2]  # second-last token is the RGB string.
             color_name = " ".join(tokens[1:-2])
             try:
                 r, g, b = [int(x) for x in rgb_str.split(",")]
@@ -56,16 +56,24 @@ def parse_color_db(txt):
             databases[current_db].append((color_name, (r, g, b)))
     return databases
 
+# Read and parse the file.
 color_txt = read_color_file()
 databases = parse_color_db(color_txt)
 
+# -----------------------------
+# Helper: Convert a list of (name, rgb) tuples into a dictionary.
+# -----------------------------
 def convert_db_list_to_dict(color_list):
     d = {}
     for name, rgb in color_list:
         d[name] = {"rgb": list(rgb)}
     return d
 
+# -----------------------------
+# Helper functions.
+# -----------------------------
 def rgb_to_hex(r, g, b):
+    """Convert RGB (0-255) to a hex string."""
     return f'#{r:02x}{g:02x}{b:02x}'
 
 def mix_colors(recipe):
@@ -84,13 +92,23 @@ def color_error(c1, c2):
     return math.sqrt(sum((a - b) ** 2 for a, b in zip(c1, c2)))
 
 def generate_recipes(target, base_colors_dict, step=10.0):
+    """
+    Generate candidate recipes from 3-color combinations using only base colors
+    from the selected database.
+    'step' is the percentage increment.
+    Returns a list of tuples (recipe, mixed_color, error).
+    Each recipe is a list of tuples (base_color_name, percentage).
+    """
     candidates = []
     base_list = [(name, info["rgb"]) for name, info in base_colors_dict.items()]
+    
+    # Special case: if any base color nearly matches the target.
     for name, rgb in base_list:
         err = color_error(tuple(rgb), target)
         if err < 5:
             recipe = [(name, 100.0)]
             candidates.append((recipe, tuple(rgb), err))
+    
     for (name1, rgb1), (name2, rgb2), (name3, rgb3) in itertools.combinations(base_list, 3):
         for p1 in np.arange(0, 100 + step, step):
             for p2 in np.arange(0, 100 - p1 + step, step):
@@ -128,13 +146,22 @@ def display_thin_color_block(color):
         unsafe_allow_html=True,
     )
 
+# -----------------------------
+# File update helpers.
+# -----------------------------
 def add_color_to_db(selected_db, color_name, r, g, b):
+    """
+    Add a new color to the specified database section in the color.txt file.
+    Reads the file, finds the selected database section, and inserts a new line
+    with the next available index. (A dummy density value 0 is added.)
+    """
     try:
         with open(COLOR_DB_FILE, "r") as f:
             lines = f.readlines()
     except Exception as e:
         st.error("Error reading file for update: " + str(e))
         return False
+
     new_lines = []
     in_section = False
     inserted = False
@@ -145,6 +172,7 @@ def add_color_to_db(selected_db, color_name, r, g, b):
             new_lines.append(line)
             continue
         if not stripped[0].isdigit():
+            # Header line.
             if in_section and not inserted:
                 new_lines.append(f"{last_index+1} {color_name} {r},{g},{b} 0\n")
                 inserted = True
@@ -175,12 +203,17 @@ def add_color_to_db(selected_db, color_name, r, g, b):
         return False
 
 def remove_color_from_db(selected_db, color_name):
+    """
+    Remove a color from the specified database in color.txt.
+    The color is identified by matching the name (case-insensitive).
+    """
     try:
         with open(COLOR_DB_FILE, "r") as f:
             lines = f.readlines()
     except Exception as e:
         st.error("Error reading file for removal: " + str(e))
         return False
+
     new_lines = []
     in_section = False
     removed = False
@@ -198,10 +231,10 @@ def remove_color_from_db(selected_db, color_name):
             continue
         if in_section and not removed:
             tokens = stripped.split()
-            current_name = " ".join(tokens[1:-2]).strip()
+            current_name = " ".join(tokens[1:-2]).strip()  # Exclude index, RGB and density.
             if current_name.lower() == color_name.lower():
                 removed = True
-                continue
+                continue  # Skip this line to remove it.
         new_lines.append(line)
     if not removed:
         st.warning("Color not found in the selected database.")
@@ -216,6 +249,9 @@ def remove_color_from_db(selected_db, color_name):
         return False
 
 def create_custom_database(new_db_name):
+    """
+    Append a new database header to the end of color.txt.
+    """
     line = f"\n{new_db_name}\n"
     try:
         with open(COLOR_DB_FILE, "a") as f:
@@ -227,12 +263,17 @@ def create_custom_database(new_db_name):
         return False
 
 def remove_database(db_name):
+    """
+    Remove an entire database (its header and all associated lines)
+    from color.txt.
+    """
     try:
         with open(COLOR_DB_FILE, "r") as f:
             lines = f.readlines()
     except Exception as e:
         st.error("Error reading file for removal: " + str(e))
         return False
+
     new_lines = []
     in_target = False
     removed = False
@@ -245,7 +286,7 @@ def remove_database(db_name):
             if stripped == db_name:
                 in_target = True
                 removed = True
-                continue
+                continue  # Skip header for target db.
             else:
                 in_target = False
                 new_lines.append(line)
@@ -266,6 +307,9 @@ def remove_database(db_name):
         st.error("Error writing to file: " + str(e))
         return False
 
+# -----------------------------
+# Colors DataBase Subpages.
+# -----------------------------
 def show_databases_page():
     st.title("Color Database - Data Bases")
     selected_db = st.selectbox("Select a color database:", list(databases.keys()))
@@ -355,134 +399,101 @@ def show_remove_database_page():
             else:
                 st.error("Please enter a database name.")
 
-def display_color_block(color, label=""):
-    hex_color = rgb_to_hex(*color)
-    st.markdown(
-        f"<div style='background-color: {hex_color}; width:100px; height:100px; border:1px solid #000; text-align: center; line-height: 100px;'>{label}</div>",
-        unsafe_allow_html=True,
-    )
-
-def display_thin_color_block(color):
-    hex_color = rgb_to_hex(*color)
-    st.markdown(
-        f"<div style='background-color: {hex_color}; width:50px; height:20px; border:1px solid #000; display:inline-block; margin-right:10px;'></div>",
-        unsafe_allow_html=True,
-    )
-
+# -----------------------------
+# Main app navigation.
+# -----------------------------
 def main():
-    st.set_page_config(page_title="Image Generator, Shape Detector, & Oil Painting", layout="wide")
-    st.sidebar.title("Options")
-    app_mode = st.sidebar.radio(
-        "Select Mode",
-        [
-            "Image Generator",
-            "Shape Detector",
-            "Oil Painting Generator",
-            "Colour Merger",
-            "Recipe Generator",
-            "Color DataBase"
-        ]
-    )
+    if "subpage" not in st.session_state:
+        st.session_state.subpage = None
 
-    if app_mode == "Image Generator":
-        st.header("Image Generator")
-        uploaded_file = st.file_uploader("Upload an Image", type=["jpg", "jpeg", "png"])
-        shape_option = st.selectbox("Select Shape", ["Triangle", "Rectangle", "Circle"])
-        # --- New options for number and size of shapes ---
-        num_shapes = st.number_input("Enter the number of shapes to encode:", min_value=1, value=10)
-        shape_size = st.number_input("Enter the size of the shape:", min_value=1, value=10)
-        # -----------------------------------------------------
-        col1, col2 = st.columns([1, 1])
-        if uploaded_file is not None:
-            file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-            img = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-            if img is None:
-                st.error("Error reading the image. Please try another file.")
+    st.sidebar.title("Navigation")
+    page = st.sidebar.radio("Go to:", ["Recipe Generator", "Colors DataBase"])
+    
+    if page == "Recipe Generator":
+        st.title("Painter App - Recipe Generator")
+        st.write("Enter your desired paint color to generate paint recipes using base colors.")
+        
+        db_choice = st.selectbox("Select a color database:", list(databases.keys()))
+        selected_db_dict = convert_db_list_to_dict(databases[db_choice])
+        
+        method = st.radio("Select input method:", ["Color Picker", "RGB Sliders"])
+        if method == "Color Picker":
+            desired_hex = st.color_picker("Pick a color", "#ffffff")
+            desired_rgb = tuple(int(desired_hex[i:i+2], 16) for i in (1, 3, 5))
+        else:
+            st.write("Select RGB values manually:")
+            r = st.slider("Red", 0, 255, 255)
+            g = st.slider("Green", 0, 255, 255)
+            b = st.slider("Blue", 0, 255, 255)
+            desired_rgb = (r, g, b)
+            desired_hex = rgb_to_hex(r, g, b)
+        
+        st.write("**Desired Color:**", desired_hex)
+        display_color_block(desired_rgb, label="Desired")
+        
+        step = st.slider("Select percentage step for recipe generation:", 4.0, 10.0, 10.0, step=0.5)
+        
+        if st.button("Generate Recipes"):
+            recipes = generate_recipes(desired_rgb, selected_db_dict, step=step)
+            if recipes:
+                st.write("### Top 3 Paint Recipes")
+                for idx, (recipe, mixed, err) in enumerate(recipes):
+                    st.write(f"**Recipe {idx+1}:** (Error = {err:.2f})")
+                    cols = st.columns(4)
+                    with cols[0]:
+                        st.write("Desired:")
+                        display_color_block(desired_rgb, label="Desired")
+                    with cols[1]:
+                        st.write("Result:")
+                        display_color_block(mixed, label="Mixed")
+                    with cols[2]:
+                        st.write("Composition:")
+                        for name, perc in recipe:
+                            if perc > 0:
+                                base_rgb = tuple(selected_db_dict[name]["rgb"])
+                                st.write(f"- **{name}**: {perc:.1f}%")
+                                display_color_block(base_rgb, label=name)
+                    with cols[3]:
+                        st.write("Difference:")
+                        st.write(f"RGB Distance: {err:.2f}")
             else:
-                img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                with col1:
-                    st.image(img_rgb, caption="Uploaded Image", use_container_width=True)
-        if st.button("Generate"):
-            if uploaded_file is not None:
-                shape = shape_option
-                encoded_image, boundaries = encode(img, shape, output_path="", num_shapes=num_shapes, shape_size=shape_size)
-                encoded_image_rgb = cv2.cvtColor(encoded_image, cv2.COLOR_BGR2RGB)
-                with col2:
-                    st.image(encoded_image_rgb, caption=f"Encoded {shape_option} Image", use_container_width=True)
-                is_success, buffer = cv2.imencode(".png", encoded_image)
-                if is_success:
-                    st.download_button(
-                        label="Download Encoded Image",
-                        data=buffer.tobytes(),
-                        file_name="encoded_image.png",
-                        mime="image/png"
-                    )
-            else:
-                st.warning("Please upload an image first.")
+                st.error("No recipes found.")
+        st.session_state.subpage = None
 
-    elif app_mode == "Shape Detector":
-        st.header("Shape Detector")
-        uploaded_file = st.file_uploader("Upload an Encoded Image", type=["jpg", "jpeg", "png"])
-        shape_option = st.selectbox("Select Shape", ["Triangle", "Rectangle", "Circle"])
-        col1, col2 = st.columns([1, 1])
-        if uploaded_file is not None:
-            file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-            encoded_image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
-            if encoded_image is None:
-                st.error("Error reading the image. Please try another file.")
-            else:
-                encoded_image_rgb = cv2.cvtColor(encoded_image, cv2.COLOR_BGR2RGB)
-                with col1:
-                    st.image(encoded_image_rgb, caption="Uploaded Encoded Image", use_container_width=True)
-        if st.button("Decode"):
-            if uploaded_file is not None:
-                shape = shape_option
-                binary_img, annotated_img, rgb_vals = decode(encoded_image, shape, boundaries=None)
-                grouped_colors = group_similar_colors(rgb_vals, threshold=10)
-                grouped_colors = sorted(grouped_colors, key=lambda x: x[1], reverse=True)
-                annotated_img_rgb = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
-                with col2:
-                    st.image(annotated_img_rgb, caption=f"Decoded Annotated {shape_option} Image", use_container_width=True)
-                st.subheader("Grouped Colors (Ranked by Count)")
-                col1, col2, col3 = st.columns(3)
-                for idx, (color, count) in enumerate(grouped_colors):
-                    rgb_str = f"RGB: {color} - Count: {count}"
-                    color_box = f"background-color: rgb({color[0]}, {color[1]}, {color[2]}); height: 30px; width: 30px; margin-right: 10px; display: inline-block;"
-                    if idx % 3 == 0:
-                        with col1:
-                            st.markdown(f"<div style='{color_box}'></div> {rgb_str}", unsafe_allow_html=True)
-                    elif idx % 3 == 1:
-                        with col2:
-                            st.markdown(f"<div style='{color_box}'></div> {rgb_str}", unsafe_allow_html=True)
-                    else:
-                        with col3:
-                            st.markdown(f"<div style='{color_box}'></div> {rgb_str}", unsafe_allow_html=True)
-                is_success, buffer = cv2.imencode(".png", annotated_img)
-                if is_success:
-                    st.download_button(
-                        label="Download Decoded Image",
-                        data=buffer.tobytes(),
-                        file_name="decoded_image.png",
-                        mime="image/png"
-                    )
-            else:
-                st.warning("Please upload an image first.")
-
-    elif app_mode == "Oil Painting Generator":
-        oil_painting_page()
-
-    elif app_mode == "Colour Merger":
-        color_mixing_app()
-
-    # -----------------------------
-    # New Modes: Recipe Generator and Color DataBase
-    # -----------------------------
-    elif app_mode == "Recipe Generator":
-        import painter2
-        painter2.main()
-    elif app_mode == "Color DataBase":
-        import painter2
-        painter2.main()
+    elif page == "Colors DataBase":
+        st.title("Colors DataBase")
+        st.write("Select an action:")
+        # Arrange six buttons in two rows with 3 columns each.
+        row1_cols = st.columns(3)
+        with row1_cols[0]:
+            if st.button("Data Bases"):
+                st.session_state.subpage = "databases"
+        with row1_cols[1]:
+            if st.button("Add Colors"):
+                st.session_state.subpage = "add"
+        with row1_cols[2]:
+            if st.button("Remove Colors"):
+                st.session_state.subpage = "remove_colors"
+        row2_cols = st.columns(3)
+        with row2_cols[0]:
+            if st.button("Create Custom Data Base"):
+                st.session_state.subpage = "custom"
+        with row2_cols[1]:
+            if st.button("Remove Database"):
+                st.session_state.subpage = "remove_database"
+        with row2_cols[2]:
+            st.write("")  # Empty placeholder for equal spacing.
+        
+        if st.session_state.subpage == "databases":
+            show_databases_page()
+        elif st.session_state.subpage == "add":
+            show_add_colors_page()
+        elif st.session_state.subpage == "remove_colors":
+            show_remove_colors_page()
+        elif st.session_state.subpage == "custom":
+            show_create_custom_db_page()
+        elif st.session_state.subpage == "remove_database":
+            show_remove_database_page()
 
 if __name__ == "__main__":
     main()
