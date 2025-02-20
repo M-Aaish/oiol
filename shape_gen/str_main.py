@@ -231,8 +231,6 @@ def read_color_file(filename, mod_time):
         st.error("Error reading color.txt: " + str(e))
         return ""
 
-# Get the file modification time.
-color_file_mod_time = os.path.getmtime(COLOR_DB_FILE)
 
 def parse_color_db(txt):
     databases = {}
@@ -259,7 +257,7 @@ def parse_color_db(txt):
                 continue
             databases[current_db].append((color_name, (r, g, b)))
     return databases
-color_txt = read_color_file(COLOR_DB_FILE, color_file_mod_time)
+color_txt = read_color_file()
 databases = parse_color_db(color_txt)
 
 def convert_db_list_to_dict(color_list):
