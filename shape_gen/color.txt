@@ -27,10 +27,10 @@ Artisan - Winsor & Newton
 26 Prussian Blue 15,11,11 984
 27 Raw Sienna 117,70,17 1211
 28 Raw Umber 37,26,20 1273
-29 Titanium White 249245234 1423
+29 Titanium White 249,245,234 1423
 30 Viridian 0,53,40 1149
 31 Yellow Ochre 187,128,18 1128
-32 Zinc White (Mixing White) 250242222 1687
+32 Zinc White (Mixing White) 250,242,222 1687
 
 Artists Oil - Winsor & Newton
 1 Alizarin Crimson 68,2,6 1045
