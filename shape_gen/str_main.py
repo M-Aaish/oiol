@@ -631,10 +631,19 @@ def painter_colors_database():
 # --- Main Navigation (6 radio buttons)
 # --------------------------------------------------------------------
 def main():
-    COLOR_DB_FILE = os.path.join(os.path.dirname(__file__), "color.txt")
-    st.write("Color DB File Path:", os.path.abspath(COLOR_DB_FILE))
-    if not os.path.exists(COLOR_DB_FILE):
-    st.error("File not found at " + os.path.abspath(COLOR_DB_FILE))
+# Build an absolute path to color.txt (assuming it is in the same directory as this file)
+COLOR_DB_FILE = os.path.join(os.path.dirname(__file__), "color.txt")
+
+# Check if the file exists; if not, create it with default content.
+if not os.path.exists(COLOR_DB_FILE):
+    default_content = (
+        "Default Database\n"
+        "1 Red 255,0,0 0\n"
+        "2 Green 0,255,0 0\n"
+        "3 Blue 0,0,255 0\n"
+    )
+    with open(COLOR_DB_FILE, "w") as f:
+        f.write(default_content)
 
     st.sidebar.title("Options")
     app_mode = st.sidebar.radio("Select Mode", [
