@@ -220,14 +220,21 @@ def shape_detector_app():
 BASE_DIR = Path(__file__).parent if '__file__' in globals() else Path.cwd()
 COLOR_DB_FILE = str(BASE_DIR / "color.txt")
 
+import os
+
 @st.cache_data
-def read_color_file(filename=COLOR_DB_FILE):
+def read_color_file(filename, mod_time):
     try:
         with open(filename, "r") as f:
             return f.read()
     except Exception as e:
         st.error("Error reading color.txt: " + str(e))
         return ""
+
+# Get the file modification time.
+color_file_mod_time = os.path.getmtime(COLOR_DB_FILE)
+color_txt = read_color_file(COLOR_DB_FILE, color_file_mod_time)
+databases = parse_color_db(color_txt)
 
 def parse_color_db(txt):
     databases = {}
@@ -255,8 +262,6 @@ def parse_color_db(txt):
             databases[current_db].append((color_name, (r, g, b)))
     return databases
 
-color_txt = read_color_file()
-databases = parse_color_db(color_txt)
 
 def convert_db_list_to_dict(color_list):
     d = {}
