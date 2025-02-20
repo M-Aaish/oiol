@@ -471,6 +471,7 @@ def remove_database(db_name):
     except Exception as e:
         st.error("Error writing to file: " + str(e))
         return False
+
 def show_databases_page():
     st.title("Color Database - Data Bases")
     selected_db = st.selectbox("Select a color database:", list(databases.keys()))
@@ -524,24 +525,23 @@ def show_remove_colors_page():
 def show_remove_database_page():
     global databases
     st.title("Colors DataBase - Remove Database")
-    # Provide a dropdown listing all available databases.
+    # Dropdown of databases.
     db_options = list(databases.keys())
-    if not db_options:
-        st.warning("No databases available.")
-        return
     selected_db_to_remove = st.selectbox("Select the database to remove:", db_options)
-    confirm = st.checkbox("I confirm that I want to permanently delete this database.")
-    if st.button("Remove Database"):
-        if selected_db_to_remove and confirm:
-            success = remove_database(selected_db_to_remove)
-            if success:
-                st.success(f"Database '{selected_db_to_remove}' removed!")
-                color_txt = read_color_file(COLOR_DB_FILE)
-                databases = parse_color_db(color_txt)
+    with st.form("remove_db_form"):
+        confirm = st.checkbox("I confirm that I want to permanently delete this database.")
+        submitted = st.form_submit_button("Remove Database")
+        if submitted:
+            if selected_db_to_remove and confirm:
+                success = remove_database(selected_db_to_remove)
+                if success:
+                    st.success(f"Database '{selected_db_to_remove}' removed!")
+                    color_txt = read_color_file(COLOR_DB_FILE)
+                    databases = parse_color_db(color_txt)
+                else:
+                    st.error("Failed to remove database.")
             else:
-                st.error("Failed to remove database.")
-        else:
-            st.error("Please select a database and confirm deletion.")
+                st.error("Please select a database and confirm deletion.")
 
 def show_create_custom_db_page():
     global databases
