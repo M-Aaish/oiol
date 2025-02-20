@@ -633,6 +633,8 @@ def painter_colors_database():
 def main():
     COLOR_DB_FILE = os.path.join(os.path.dirname(__file__), "color.txt")
     st.write("Color DB File Path:", os.path.abspath(COLOR_DB_FILE))
+    if not os.path.exists(COLOR_DB_FILE):
+    st.error("File not found at " + os.path.abspath(COLOR_DB_FILE))
 
     st.sidebar.title("Options")
     app_mode = st.sidebar.radio("Select Mode", [
