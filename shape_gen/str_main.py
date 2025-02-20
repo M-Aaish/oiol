@@ -1,5 +1,9 @@
 import streamlit as st
-from streamlit.runtime.scriptrunner import RerunException, RerunData
+try:
+    from streamlit.runtime.scriptrunner import RerunException, RerunData
+except ImportError:
+    RerunException = None
+
 from io import BytesIO
 from PIL import Image
 import numpy as np
@@ -637,11 +641,13 @@ def painter_colors_database():
 def main():
     st.sidebar.title("Options")
     
-    # Add a refresh button in the sidebar.
     if st.sidebar.button("Refresh App"):
         read_color_file.clear()  # Clear the cached data.
-        st.experimental_rerun()  # Rerun the app.
-
+        if RerunException is not None:
+            raise RerunException(RerunData())  # Force a rerun.
+        else:
+            st.warning("Automatic refresh is not supported. Please manually reload your browser.")
+    
     app_mode = st.sidebar.radio("Select Mode", [
         "Image Generator", 
         "Shape Detector", 
