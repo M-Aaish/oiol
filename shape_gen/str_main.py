@@ -631,6 +631,9 @@ def painter_colors_database():
 # --- Main Navigation (6 radio buttons)
 # --------------------------------------------------------------------
 def main():
+    COLOR_DB_FILE = os.path.join(os.path.dirname(__file__), "color.txt")
+    st.write("Color DB File Path:", os.path.abspath(COLOR_DB_FILE))
+
     st.sidebar.title("Options")
     app_mode = st.sidebar.radio("Select Mode", [
         "Image Generator", 
