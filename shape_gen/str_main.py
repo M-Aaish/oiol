@@ -211,7 +211,7 @@ def shape_detector_app():
 # --------------------------------------------------------------------
 
 # File name for our color database.
-COLOR_DB_FILE = "color.txt"
+COLOR_DB_FILE = "shape_gen/color.txt"
 
 @st.cache_data
 def read_color_file(filename=COLOR_DB_FILE):
