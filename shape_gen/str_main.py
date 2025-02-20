@@ -215,7 +215,7 @@ def shape_detector_app():
 BASE_DIR = Path(__file__).parent if '__file__' in globals() else Path.cwd()
 COLOR_DB_FILE = str(BASE_DIR / "color.txt")
 
-
+@st.cache_data
 def read_color_file(filename=COLOR_DB_FILE):
     try:
         with open(filename, "r") as f:
