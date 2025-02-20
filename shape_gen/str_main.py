@@ -223,13 +223,14 @@ COLOR_DB_FILE = str(BASE_DIR / "color.txt")
 import os
 
 @st.cache_data
-def read_color_file(filename, mod_time):
+def read_color_file(filename=COLOR_DB_FILE):
     try:
         with open(filename, "r") as f:
             return f.read()
     except Exception as e:
         st.error("Error reading color.txt: " + str(e))
         return ""
+
 
 
 def parse_color_db(txt):
