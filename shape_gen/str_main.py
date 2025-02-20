@@ -635,6 +635,12 @@ def painter_colors_database():
 # --------------------------------------------------------------------
 def main():
     st.sidebar.title("Options")
+    
+    # Add a refresh button in the sidebar.
+    if st.sidebar.button("Refresh App"):
+        read_color_file.clear()  # Clear the cached data.
+        st.experimental_rerun()  # Rerun the app.
+
     app_mode = st.sidebar.radio("Select Mode", [
         "Image Generator", 
         "Shape Detector", 
@@ -643,6 +649,7 @@ def main():
         "Recipe Generator", 
         "Colors DataBase"
     ])
+    
     if app_mode == "Image Generator":
         image_generator_app()
     elif app_mode == "Shape Detector":
