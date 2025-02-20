@@ -236,14 +236,17 @@ def parse_color_db(txt):
         line = line.strip()
         if not line:
             continue
+        # If line doesn't start with a digit, treat it as a header (database name).
         if not line[0].isdigit():
             current_db = line
             databases[current_db] = []
         else:
             tokens = line.split()
+            # Expect at least 4 tokens: index, color name, RGB string, density.
             if len(tokens) < 4:
                 continue
-            rgb_str = tokens[-2]
+            index = tokens[0]
+            rgb_str = tokens[-2]  # second-last token is the RGB string.
             color_name = " ".join(tokens[1:-2])
             try:
                 r, g, b = [int(x) for x in rgb_str.split(",")]
@@ -425,6 +428,10 @@ def create_custom_database(new_db_name):
         return False
 
 def remove_database(db_name):
+    """
+    Remove an entire database (its header and all associated lines)
+    from color.txt.
+    """
     try:
         with open(COLOR_DB_FILE, "r") as f:
             lines = f.readlines()
@@ -444,7 +451,7 @@ def remove_database(db_name):
             if stripped == db_name:
                 in_target = True
                 removed = True
-                continue
+                continue  # Skip header for target db.
             else:
                 in_target = False
                 new_lines.append(line)
@@ -464,7 +471,6 @@ def remove_database(db_name):
     except Exception as e:
         st.error("Error writing to file: " + str(e))
         return False
-
 def show_databases_page():
     st.title("Color Database - Data Bases")
     selected_db = st.selectbox("Select a color database:", list(databases.keys()))
