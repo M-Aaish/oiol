@@ -158,7 +158,7 @@ def encode(input_image, shape_type, output_path, **kwargs):
                     too_close = True
                     break
             if not too_close:
-                cv2.rectangle(img_mask, (x, y), (x + width, y + height), 255, 1)
+                cv2.rectangle(img_mask, (x, y), (x + width, y + height), 255, thickness=-1)
                 boundaries.append((x, y, width, height))
                 failed_attempts = 0
             else:
@@ -218,11 +218,9 @@ def encode(input_image, shape_type, output_path, **kwargs):
             cv2.polylines(encode_mask, [pts], isClosed=True, color=255, thickness=1)
     elif shape_type in ['rectangle', 'rectangles']:
         for (x, y, width, height) in boundaries:
-            # Changed: fill the rectangle instead of drawing only its outline.
             cv2.rectangle(encode_mask, (x, y), (x + width, y + height), 255, thickness=-1)
     elif shape_type in ['circle', 'circles']:
         for (cx, cy, radius) in boundaries:
-            # Changed: fill the circle.
             cv2.circle(encode_mask, (cx, cy), radius, 255, thickness=-1)
 
     encoded_image = overlay_img.copy()
@@ -329,7 +327,14 @@ def decode(encoded_image, shape_type, boundaries=None):
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
         closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
         contours, _ = cv2.findContours(closed, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        # Compute median area to filter out extra-large contours.
+        areas = [cv2.contourArea(cnt) for cnt in contours if cv2.contourArea(cnt) > 0]
+        med_area = np.median(areas) if areas else 0
         for cnt in contours:
+            area = cv2.contourArea(cnt)
+            # Skip contours that are too large (more than ~2x the median area)
+            if med_area > 0 and area > 2.0 * med_area:
+                continue
             x, y, w_rect, h_rect = cv2.boundingRect(cnt)
             if w_rect > 1 and h_rect > 1:
                 cv2.rectangle(annotated, (x, y), (x + w_rect, y + h_rect), (0, 255, 0), 1)
@@ -344,7 +349,8 @@ def decode(encoded_image, shape_type, boundaries=None):
             (x, y), radius = cv2.minEnclosingCircle(cnt)
             center = (int(x), int(y))
             radius = int(radius)
-            if radius > 4 and radius < 12:
+            # Adjusted thresholds for circles (for example, if shape size is 15, radius may be around 15)
+            if radius > 10 and radius < 25:
                 cv2.circle(annotated, center, radius, (0, 255, 0), 1)
                 b, g, r = encoded_image[center[1], center[0]]
                 rgb_values.append([r, g, b])
