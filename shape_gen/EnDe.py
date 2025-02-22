@@ -184,7 +184,6 @@ def encode(input_image, shape_type, output_path, **kwargs):
             boundaries_final = boundaries_max + boundaries_min
         else:
             boundaries_final = boundaries_max
-        # Create output mask based on boundaries_final.
         img_mask = np.zeros((h, w), dtype=np.uint8)
         for (x, y, width, height) in boundaries_final:
             cv2.rectangle(img_mask, (x, y), (x + width, y + height), 255, thickness=-1)
@@ -229,8 +228,10 @@ def encode(input_image, shape_type, output_path, **kwargs):
             min_radius=max_radius_val,
             max_radius=max_radius_val
         )
-        if len(circles_max) < num_circles:
-            remaining = num_circles - len(circles_max)
+        circles_final = circles_max
+        # If fewer than required, generate additional circles with min_radius_val.
+        if len(circles_final) < num_circles:
+            remaining = num_circles - len(circles_final)
             circle_image_min, num_generated_min, circles_min = generate_max_random_circles(
                 image_size=(h, w),
                 max_attempts=kwargs.get('max_attempts', 10000),
@@ -239,9 +240,17 @@ def encode(input_image, shape_type, output_path, **kwargs):
                 min_radius=min_radius_val,
                 max_radius=min_radius_val
             )
-            circles_final = circles_max + circles_min
-        else:
-            circles_final = circles_max
+            # Filter out any small circle that overlaps a large circle.
+            non_overlap_circles_min = []
+            for c in circles_min:
+                overlap = False
+                for cl in circles_max:
+                    if np.sqrt((c[0]-cl[0])**2 + (c[1]-cl[1])**2) < (c[2] + cl[2]):
+                        overlap = True
+                        break
+                if not overlap:
+                    non_overlap_circles_min.append(c)
+            circles_final = circles_max + non_overlap_circles_min
         resized_circle_image = resize_image_to_shape(circle_image_max, image_resized.shape[:2])
         averaged_circle_image = compute_average_under_circles(image_resized, resized_circle_image, circles_final)
         overlay_img = overlay_mask_on_image(image_resized, averaged_circle_image)
