@@ -158,7 +158,7 @@ def encode(input_image, shape_type, output_path, **kwargs):
                     too_close = True
                     break
             if not too_close:
-                cv2.rectangle(img_mask, (x, y), (x + width, y + height), 255, thickness=-1)
+                cv2.rectangle(img_mask, (x, y), (x + width, y + height), 255, 1)
                 boundaries.append((x, y, width, height))
                 failed_attempts = 0
             else:
@@ -209,6 +209,57 @@ def encode(input_image, shape_type, output_path, **kwargs):
 
     else:
         raise ValueError("Unsupported shape type. Choose from 'triangles', 'rectangles', or 'circles'.")
+
+    # Create an encoding mask for boundaries.
+    encode_mask = np.zeros(original_resized.shape[:2], dtype=np.uint8)
+    if shape_type in ['triangle', 'triangles']:
+        for tri in boundaries:
+            pts = np.int32(tri)
+            cv2.polylines(encode_mask, [pts], isClosed=True, color=255, thickness=1)
+    elif shape_type in ['rectangle', 'rectangles']:
+        for (x, y, width, height) in boundaries:
+            cv2.rectangle(encode_mask, (x, y), (x + width, y + height), 255, thickness=1)
+    elif shape_type in ['circle', 'circles']:
+        for (cx, cy, radius) in boundaries:
+            cv2.circle(encode_mask, (cx, cy), radius, 255, thickness=1)
+
+    encoded_image = overlay_img.copy()
+    # Encode boundary information into the blue channel's LSB.
+    for i in range(encoded_image.shape[0]):
+        for j in range(encoded_image.shape[1]):
+            if encode_mask[i, j] == 255:
+                encoded_image[i, j] = original_resized[i, j]
+                encoded_image[i, j, 0] = (encoded_image[i, j, 0] & 254) | 1
+            else:
+                encoded_image[i, j, 0] = encoded_image[i, j, 0] & 254
+
+    # Add corner markers for validation (3x3 blocks in each corner)
+    corner_size = 3
+    h_img, w_img, _ = encoded_image.shape
+    corner_positions = {
+        "top_left": (0, 0),
+        "top_right": (0, w_img - corner_size),
+        "bottom_left": (h_img - corner_size, 0),
+        "bottom_right": (h_img - corner_size, w_img - corner_size)
+    }
+    expected_patterns = {
+        "top_left": (1, 1, 1),
+        "top_right": (0, 0, 1),
+        "bottom_left": (0, 1, 0),
+        "bottom_right": (1, 0, 0)
+    }
+    for corner, (y, x) in corner_positions.items():
+        exp_b, exp_g, exp_r = expected_patterns[corner]
+        for i in range(y, y + corner_size):
+            for j in range(x, x + corner_size):
+                encoded_image[i, j, 0] = (encoded_image[i, j, 0] & 254) | exp_b
+                encoded_image[i, j, 1] = (encoded_image[i, j, 1] & 254) | exp_g
+                encoded_image[i, j, 2] = (encoded_image[i, j, 2] & 254) | exp_r
+
+    if shape_type in ['circle', 'circles']:
+        return encoded_image, boundaries
+    else:
+        return encoded_image, boundaries
 
     # Create an encoding mask for boundaries.
     encode_mask = np.zeros(original_resized.shape[:2], dtype=np.uint8)
