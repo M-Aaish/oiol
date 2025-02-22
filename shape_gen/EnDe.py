@@ -186,6 +186,7 @@ def encode(input_image, shape_type, output_path, **kwargs):
             boundaries_final = boundaries_max
         img_mask = np.zeros((h, w), dtype=np.uint8)
         for (x, y, width, height) in boundaries_final:
+            # Fill the rectangle.
             cv2.rectangle(img_mask, (x, y), (x + width, y + height), 255, thickness=-1)
         output_mask = np.zeros((h, w, 4), dtype=np.uint8)
         for (x, y, width, height) in boundaries_final:
@@ -228,10 +229,9 @@ def encode(input_image, shape_type, output_path, **kwargs):
             min_radius=max_radius_val,
             max_radius=max_radius_val
         )
-        circles_final = circles_max
-        # If fewer than required, generate additional circles with min_radius_val.
-        if len(circles_final) < num_circles:
-            remaining = num_circles - len(circles_final)
+        # Second pass: if needed, generate additional circles using min_radius_val.
+        if len(circles_max) < num_circles:
+            remaining = num_circles - len(circles_max)
             circle_image_min, num_generated_min, circles_min = generate_max_random_circles(
                 image_size=(h, w),
                 max_attempts=kwargs.get('max_attempts', 10000),
@@ -240,22 +240,14 @@ def encode(input_image, shape_type, output_path, **kwargs):
                 min_radius=min_radius_val,
                 max_radius=min_radius_val
             )
-            # Filter out any small circle that overlaps a large circle.
-            non_overlap_circles_min = []
-            for c in circles_min:
-                overlap = False
-                for cl in circles_max:
-                    if np.sqrt((c[0]-cl[0])**2 + (c[1]-cl[1])**2) < (c[2] + cl[2]):
-                        overlap = True
-                        break
-                if not overlap:
-                    non_overlap_circles_min.append(c)
-            circles_final = circles_max + non_overlap_circles_min
+            boundaries_final = circles_max + circles_min
+        else:
+            boundaries_final = circles_max
         resized_circle_image = resize_image_to_shape(circle_image_max, image_resized.shape[:2])
-        averaged_circle_image = compute_average_under_circles(image_resized, resized_circle_image, circles_final)
+        averaged_circle_image = compute_average_under_circles(image_resized, resized_circle_image, boundaries_final)
         overlay_img = overlay_mask_on_image(image_resized, averaged_circle_image)
         original_resized = image_resized
-        boundaries = circles_final
+        boundaries = boundaries_final
 
     else:
         raise ValueError("Unsupported shape type. Choose from 'triangles', 'rectangles', or 'circles'.")
@@ -268,10 +260,10 @@ def encode(input_image, shape_type, output_path, **kwargs):
             cv2.polylines(encode_mask, [pts], isClosed=True, color=255, thickness=1)
     elif shape_type in ['rectangle', 'rectangles']:
         for (x, y, width, height) in boundaries:
-            cv2.rectangle(encode_mask, (x, y), (x + width, y + height), 255, thickness=1)
+            cv2.rectangle(encode_mask, (x, y), (x + width, y + height), 255, thickness=-1)
     elif shape_type in ['circle', 'circles']:
         for (cx, cy, radius) in boundaries:
-            cv2.circle(encode_mask, (cx, cy), radius, 255, thickness=1)
+            cv2.circle(encode_mask, (cx, cy), radius, 255, thickness=-1)
 
     encoded_image = overlay_img.copy()
     # Encode boundary information into the blue channel's LSB.
@@ -387,6 +379,9 @@ def decode(encoded_image, shape_type, boundaries=None):
                 rgb_values.append([r, g, b])
     elif shape_type in ['circle', 'circles']:
         ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
+        # Apply a small erosion to separate touching circles.
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
+        binary_image = cv2.erode(binary_image, kernel, iterations=1)
         contours, _ = cv2.findContours(binary_image, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         for cnt in contours:
             (x, y), radius = cv2.minEnclosingCircle(cnt)
