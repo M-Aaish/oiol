@@ -218,10 +218,12 @@ def encode(input_image, shape_type, output_path, **kwargs):
             cv2.polylines(encode_mask, [pts], isClosed=True, color=255, thickness=1)
     elif shape_type in ['rectangle', 'rectangles']:
         for (x, y, width, height) in boundaries:
-            cv2.rectangle(encode_mask, (x, y), (x + width, y + height), 255, thickness=1)
+            # Changed: fill the rectangle instead of drawing only its outline.
+            cv2.rectangle(encode_mask, (x, y), (x + width, y + height), 255, thickness=-1)
     elif shape_type in ['circle', 'circles']:
         for (cx, cy, radius) in boundaries:
-            cv2.circle(encode_mask, (cx, cy), radius, 255, thickness=1)
+            # Changed: fill the circle.
+            cv2.circle(encode_mask, (cx, cy), radius, 255, thickness=-1)
 
     encoded_image = overlay_img.copy()
     # Encode boundary information into the blue channel's LSB.
