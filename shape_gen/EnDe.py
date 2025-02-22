@@ -401,7 +401,7 @@ def decode(encoded_image, shape_type, boundaries=None):
             center = (int(x), int(y))
             radius = int(radius)
             # Adjusted thresholds for circles (for example, if shape size is 15, radius may be around 15)
-            if radius > 10 and radius < 25:
+            if radius > 3 and radius < 250:
                 cv2.circle(annotated, center, radius, (0, 255, 0), 1)
                 b, g, r = encoded_image[center[1], center[0]]
                 rgb_values.append([r, g, b])
