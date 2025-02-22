@@ -68,7 +68,7 @@ def oil_painting_page():
             output_image_cv = (output_image_cv * 255).astype(np.uint8)
             output_image = Image.fromarray(output_image_cv)
             with col2:
-                st.image(output_image, caption="Processed Image", use_column_width=True)
+                st.image(output_image, caption="Processed Image", use_container_width=True)
             img_byte_arr = BytesIO()
             output_image.save(img_byte_arr, format="PNG")
             img_byte_arr.seek(0)
@@ -134,7 +134,12 @@ def image_generator_app():
     uploaded_file = st.file_uploader("Upload an Image", type=["jpg", "jpeg", "png"])
     shape_option = st.selectbox("Select Shape", ["Triangle", "Rectangle", "Circle"])
     num_shapes = st.number_input("Enter the number of shapes to encode:", min_value=1, value=10)
-    shape_size = st.number_input("Enter the size of the shape:", min_value=1, value=10)
+    # For rectangles and circles, ask for both min and max size.
+    if shape_option in ["Rectangle", "Circle"]:
+        min_size = st.number_input("Enter the minimum size of the shape:", min_value=1, value=10)
+        max_size = st.number_input("Enter the maximum size of the shape:", min_value=1, value=15)
+    else:
+        shape_size = st.number_input("Enter the size of the shape:", min_value=1, value=10)
     col1, col2 = st.columns([1, 1])
     if uploaded_file is not None:
         file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
@@ -148,8 +153,13 @@ def image_generator_app():
     if st.button("Generate"):
         if uploaded_file is not None:
             shape = shape_option
-            encoded_image, boundaries = encode(img, shape, output_path="",
-                                               num_shapes=num_shapes, shape_size=shape_size)
+            if shape_option in ["Rectangle", "Circle"]:
+                encoded_image, boundaries = encode(img, shape, output_path="",
+                                                   num_shapes=num_shapes, min_size=min_size, max_size=max_size,
+                                                   min_radius=min_size, max_radius=max_size)
+            else:
+                encoded_image, boundaries = encode(img, shape, output_path="",
+                                                   num_shapes=num_shapes, shape_size=shape_size)
             encoded_image_rgb = cv2.cvtColor(encoded_image, cv2.COLOR_BGR2RGB)
             with col2:
                 st.image(encoded_image_rgb, caption=f"Encoded {shape_option} Image", use_container_width=True)
@@ -215,7 +225,6 @@ def shape_detector_app():
 # --------------------------------------------------------------------
 # --- Functions from painter2.py (Painter App - Recipe Generator and Colors DataBase)
 # --------------------------------------------------------------------
-
 # Fix: Build an absolute path to color.txt (assuming it is in the same directory as this file)
 BASE_DIR = Path(__file__).parent if '__file__' in globals() else Path.cwd()
 COLOR_DB_FILE = str(BASE_DIR / "color.txt")
@@ -230,8 +239,6 @@ def read_color_file(filename=COLOR_DB_FILE):
     except Exception as e:
         st.error("Error reading color.txt: " + str(e))
         return ""
-
-
 
 def parse_color_db(txt):
     databases = {}
@@ -250,7 +257,7 @@ def parse_color_db(txt):
             if len(tokens) < 4:
                 continue
             index = tokens[0]
-            rgb_str = tokens[-2]  # second-last token is the RGB string.
+            rgb_str = tokens[-2]
             color_name = " ".join(tokens[1:-2])
             try:
                 r, g, b = [int(x) for x in rgb_str.split(",")]
@@ -337,7 +344,6 @@ def add_color_to_db(selected_db, color_name, r, g, b):
     except Exception as e:
         st.error("Error reading file for update: " + str(e))
         return False
-
     new_lines = []
     in_section = False
     inserted = False
@@ -384,7 +390,6 @@ def remove_color_from_db(selected_db, color_name):
     except Exception as e:
         st.error("Error reading file for removal: " + str(e))
         return False
-
     new_lines = []
     in_section = False
     removed = False
@@ -431,17 +436,12 @@ def create_custom_database(new_db_name):
         return False
 
 def remove_database(db_name):
-    """
-    Remove an entire database (its header and all associated lines)
-    from color.txt.
-    """
     try:
         with open(COLOR_DB_FILE, "r") as f:
             lines = f.readlines()
     except Exception as e:
         st.error("Error reading file for removal: " + str(e))
         return False
-
     new_lines = []
     in_target = False
     removed = False
@@ -454,7 +454,7 @@ def remove_database(db_name):
             if stripped == db_name:
                 in_target = True
                 removed = True
-                continue  # Skip header for target db.
+                continue
             else:
                 in_target = False
                 new_lines.append(line)
@@ -509,7 +509,6 @@ def show_remove_colors_page():
     global databases
     st.title("Colors DataBase - Remove Colors")
     selected_db = st.selectbox("Select a color database:", list(databases.keys()))
-    # Build a dropdown of all color names in the selected database.
     color_options = [name for name, _ in databases[selected_db]]
     if not color_options:
         st.warning("No colors available in the selected database.")
@@ -524,11 +523,9 @@ def show_remove_colors_page():
         else:
             st.error("Failed to remove color or color not found.")
 
-
 def show_remove_database_page():
     global databases
     st.title("Colors DataBase - Remove Database")
-    # Dropdown of databases.
     db_options = list(databases.keys())
     selected_db_to_remove = st.selectbox("Select the database to remove:", db_options)
     with st.form("remove_db_form"):
