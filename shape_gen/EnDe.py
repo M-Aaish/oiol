@@ -126,8 +126,8 @@ def encode(input_image, shape_type, output_path, **kwargs):
         image_orig = input_image
         image_resized = cv2.resize(image_orig, (256, 256))
         h, w, _ = image_resized.shape
-        # Retrieve rectangle parameters: use both min_size and max_size if provided.
         num_rectangles = kwargs.get('num_shapes', 653)
+        # Retrieve min and max sizes if provided.
         if 'min_size' in kwargs and 'max_size' in kwargs:
             min_size_val = kwargs['min_size']
             max_size_val = kwargs['max_size']
@@ -137,54 +137,45 @@ def encode(input_image, shape_type, output_path, **kwargs):
         else:
             min_size_val = 5
             max_size_val = 10
-
         boundaries_max = []
         attempts = 0
         failed_attempts = 0
         max_attempts = kwargs.get('max_attempts', 500000)
         max_fail_attempts = kwargs.get('max_fail_attempts', 10000)
-        # First pass: try generating rectangles using max_size.
+        # First pass: generate rectangles using max_size_val.
         while attempts < max_attempts and failed_attempts < max_fail_attempts and len(boundaries_max) < num_rectangles:
-            used_space = sum([rw * rh for (_, _, rw, rh) in boundaries_max])
-            total_space = h * w
-            remaining_capacity = (total_space - used_space) / total_space
-            min_dynamic_width = int(max_size_val + remaining_capacity * (max_size_val - max_size_val))
-            # Here, since we use max_size, both min and max dynamic width are max_size_val.
-            width = max_size_val  # fixed max size for this pass.
+            x = random.randint(0, w - max_size_val)
+            y = random.randint(0, h - max_size_val)
+            width = max_size_val
             height = max_size_val
-            x = random.randint(0, w - width)
-            y = random.randint(0, h - height)
             too_close = False
             for (rx, ry, rw, rh) in boundaries_max:
                 if rx < x + width and rx + rw > x and ry < y + height and ry + rh > y:
                     too_close = True
                     break
             if not too_close:
-                cv2.rectangle(image_resized, (x, y), (x + width, y + height), 255, thickness=-1)
                 boundaries_max.append((x, y, width, height))
                 failed_attempts = 0
             else:
                 failed_attempts += 1
             attempts += 1
-        # If not enough rectangles generated, fill remaining with min_size rectangles.
+        # Second pass: if needed, fill remaining with min_size_val rectangles.
         if len(boundaries_max) < num_rectangles:
             remaining = num_rectangles - len(boundaries_max)
             boundaries_min = []
             attempts = 0
             failed_attempts = 0
             while attempts < max_attempts and failed_attempts < max_fail_attempts and len(boundaries_min) < remaining:
+                x = random.randint(0, w - min_size_val)
+                y = random.randint(0, h - min_size_val)
                 width = min_size_val
                 height = min_size_val
-                x = random.randint(0, w - width)
-                y = random.randint(0, h - height)
                 too_close = False
-                # Check against both already placed max and min rectangles.
                 for (rx, ry, rw, rh) in boundaries_max + boundaries_min:
                     if rx < x + width and rx + rw > x and ry < y + height and ry + rh > y:
                         too_close = True
                         break
                 if not too_close:
-                    cv2.rectangle(image_resized, (x, y), (x + width, y + height), 255, thickness=-1)
                     boundaries_min.append((x, y, width, height))
                     failed_attempts = 0
                 else:
@@ -219,34 +210,34 @@ def encode(input_image, shape_type, output_path, **kwargs):
         image_resized = cv2.resize(image_orig, (512, 512))
         h, w, _ = image_resized.shape
         num_circles = kwargs.get('num_shapes', kwargs.get('max_circles_limit', 1900))
-        # Retrieve circle parameters: if user supplies both min and max.
+        # Retrieve min and max radii if provided.
         if 'min_radius' in kwargs and 'max_radius' in kwargs:
-            min_radius = kwargs['min_radius']
-            max_radius = kwargs['max_radius']
+            min_radius_val = kwargs['min_radius']
+            max_radius_val = kwargs['max_radius']
         elif 'shape_size' in kwargs:
-            min_radius = kwargs['shape_size']
-            max_radius = kwargs['shape_size']
+            min_radius_val = kwargs['shape_size']
+            max_radius_val = kwargs['shape_size']
         else:
-            min_radius = 5
-            max_radius = 10
-        # First attempt: generate circles with maximum radius.
-        circle_image_max, num_circles_generated_max, circles_max = generate_max_random_circles(
+            min_radius_val = 5
+            max_radius_val = 10
+        # First pass: generate circles using max_radius_val.
+        circle_image_max, num_generated_max, circles_max = generate_max_random_circles(
             image_size=(h, w),
             max_attempts=kwargs.get('max_attempts', 10000),
             max_fail_attempts=kwargs.get('max_fail_attempts', 10000),
             max_circles_limit=num_circles,
-            min_radius=max_radius,
-            max_radius=max_radius
+            min_radius=max_radius_val,
+            max_radius=max_radius_val
         )
         if len(circles_max) < num_circles:
             remaining = num_circles - len(circles_max)
-            circle_image_min, num_circles_generated_min, circles_min = generate_max_random_circles(
+            circle_image_min, num_generated_min, circles_min = generate_max_random_circles(
                 image_size=(h, w),
                 max_attempts=kwargs.get('max_attempts', 10000),
                 max_fail_attempts=kwargs.get('max_fail_attempts', 10000),
                 max_circles_limit=remaining,
-                min_radius=min_radius,
-                max_radius=min_radius
+                min_radius=min_radius_val,
+                max_radius=min_radius_val
             )
             circles_final = circles_max + circles_min
         else:
@@ -268,10 +259,10 @@ def encode(input_image, shape_type, output_path, **kwargs):
             cv2.polylines(encode_mask, [pts], isClosed=True, color=255, thickness=1)
     elif shape_type in ['rectangle', 'rectangles']:
         for (x, y, width, height) in boundaries:
-            cv2.rectangle(encode_mask, (x, y), (x + width, y + height), 255, thickness=-1)
+            cv2.rectangle(encode_mask, (x, y), (x + width, y + height), 255, thickness=1)
     elif shape_type in ['circle', 'circles']:
         for (cx, cy, radius) in boundaries:
-            cv2.circle(encode_mask, (cx, cy), radius, 255, thickness=-1)
+            cv2.circle(encode_mask, (cx, cy), radius, 255, thickness=1)
 
     encoded_image = overlay_img.copy()
     # Encode boundary information into the blue channel's LSB.
@@ -377,14 +368,7 @@ def decode(encoded_image, shape_type, boundaries=None):
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
         closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
         contours, _ = cv2.findContours(closed, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-        # Compute median area to filter out extra-large contours.
-        areas = [cv2.contourArea(cnt) for cnt in contours if cv2.contourArea(cnt) > 0]
-        med_area = np.median(areas) if areas else 0
         for cnt in contours:
-            area = cv2.contourArea(cnt)
-            # Skip contours that are too large (more than ~2x the median area)
-            if med_area > 0 and area > 2.0 * med_area:
-                continue
             x, y, w_rect, h_rect = cv2.boundingRect(cnt)
             if w_rect > 1 and h_rect > 1:
                 cv2.rectangle(annotated, (x, y), (x + w_rect, y + h_rect), (0, 255, 0), 1)
@@ -399,7 +383,6 @@ def decode(encoded_image, shape_type, boundaries=None):
             (x, y), radius = cv2.minEnclosingCircle(cnt)
             center = (int(x), int(y))
             radius = int(radius)
-            # Detect circles with radius between 3 and 250.
             if radius > 3 and radius < 250:
                 cv2.circle(annotated, center, radius, (0, 255, 0), 1)
                 b, g, r = encoded_image[center[1], center[0]]
