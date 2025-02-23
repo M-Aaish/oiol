@@ -308,7 +308,7 @@ def encode(input_image, shape_type, output_path, **kwargs):
     else:
         return encoded_image, boundaries
 
-def decode(encoded_image, shape_type, boundaries=None):
+def decode(encoded_image, shape_type, boundaries=None, **kwargs):
     shape_type = shape_type.lower()
     if encoded_image is None:
         st.error("Error: Encoded image is None.")
