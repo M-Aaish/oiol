@@ -378,8 +378,8 @@ def decode(encoded_image, shape_type, boundaries=None):
         med_area = np.median(areas) if areas else 0
         for cnt in contours:
             area = cv2.contourArea(cnt)
-            if med_area > 0 and area >  med_area:
-                continue
+            #if med_area > 0 and area >  med_area:
+             #   continue
             x, y, w_rect, h_rect = cv2.boundingRect(cnt)
             if w_rect > 1 and h_rect > 1:
                 cv2.rectangle(annotated, (x, y), (x + w_rect, y + h_rect), (0, 255, 0), 1)
@@ -403,8 +403,8 @@ def decode(encoded_image, shape_type, boundaries=None):
             center = (int(x), int(y))
             radius = int(radius)
             area = np.pi * (radius**2)
-            if med_area > 0 and area >  med_area:
-                continue
+            #if med_area > 0 and area >  med_area:
+             #   continue
             if radius > 3 and radius < 250:
                 cv2.circle(annotated, center, radius, (0, 255, 0), 1)
                 b, g, r = encoded_image[center[1], center[0]]
