@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt  # used internally; output is via Streamlit
 from scipy.spatial import Delaunay
 import random
 from io import BytesIO
+import math
 
 # ----- Provided Functions with Modifications -----
 
@@ -81,24 +82,20 @@ def encode(input_image, shape_type, output_path, **kwargs):
         padding = 30
         image_padded = cv2.copyMakeBorder(image_resized, padding, padding, padding, padding, cv2.BORDER_REFLECT)
         h_pad, w_pad, _ = image_padded.shape
-        # Use num_shapes (or num_triangles) from kwargs if provided
         num_triangles = kwargs.get('num_triangles', kwargs.get('num_shapes', 510))
         shape_size = kwargs.get('shape_size', None)
         if shape_size is not None:
-            # Generate a full grid of points with spacing equal to shape_size
             x_coords = np.arange(0, w_pad, shape_size)
             y_coords = np.arange(0, h_pad, shape_size)
             xx, yy = np.meshgrid(x_coords, y_coords)
             grid_points = np.vstack([xx.ravel(), yy.ravel()]).T
-            # Add a small jitter to avoid degeneracy
             jitter = 0.1 * shape_size
             grid_points = grid_points + np.random.uniform(-jitter, jitter, grid_points.shape)
             points = grid_points
         else:
-            points = np.array([[random.randint(0, w_pad), random.randint(0, h_pad)] 
-                           for _ in range(num_triangles + 2)])
+            points = np.array([[random.randint(0, w_pad), random.randint(0, h_pad)] for _ in range(num_triangles + 2)])
         tri = Delaunay(points)
-        all_triangles = tri.simplices  # All triangles from the triangulation
+        all_triangles = tri.simplices
         user_num = kwargs.get('num_shapes', None)
         if user_num is not None and user_num < len(all_triangles):
             indices = np.random.choice(len(all_triangles), user_num, replace=False)
@@ -127,7 +124,6 @@ def encode(input_image, shape_type, output_path, **kwargs):
         image_resized = cv2.resize(image_orig, (256, 256))
         h, w, _ = image_resized.shape
         num_rectangles = kwargs.get('num_shapes', 653)
-        # Retrieve min and max sizes if provided.
         if 'min_size' in kwargs and 'max_size' in kwargs:
             min_size_val = kwargs['min_size']
             max_size_val = kwargs['max_size']
@@ -142,7 +138,6 @@ def encode(input_image, shape_type, output_path, **kwargs):
         failed_attempts = 0
         max_attempts = kwargs.get('max_attempts', 500000)
         max_fail_attempts = kwargs.get('max_fail_attempts', 10000)
-        # First pass: generate rectangles using max_size_val.
         while attempts < max_attempts and failed_attempts < max_fail_attempts and len(boundaries_max) < num_rectangles:
             x = random.randint(0, w - max_size_val)
             y = random.randint(0, h - max_size_val)
@@ -159,7 +154,6 @@ def encode(input_image, shape_type, output_path, **kwargs):
             else:
                 failed_attempts += 1
             attempts += 1
-        # Second pass: if needed, fill remaining with min_size_val rectangles.
         if len(boundaries_max) < num_rectangles:
             remaining = num_rectangles - len(boundaries_max)
             boundaries_min = []
@@ -209,7 +203,6 @@ def encode(input_image, shape_type, output_path, **kwargs):
         image_resized = cv2.resize(image_orig, (512, 512))
         h, w, _ = image_resized.shape
         num_circles = kwargs.get('num_shapes', kwargs.get('max_circles_limit', 1900))
-        # Retrieve min and max radii if provided.
         if 'min_radius' in kwargs and 'max_radius' in kwargs:
             min_radius_val = kwargs['min_radius']
             max_radius_val = kwargs['max_radius']
@@ -229,7 +222,7 @@ def encode(input_image, shape_type, output_path, **kwargs):
             max_radius=max_radius_val
         )
         circles_final = circles_max
-        # If fewer than required, generate additional circles with min_radius_val.
+        # Second pass: if fewer than required, generate additional circles with min_radius_val.
         if len(circles_final) < num_circles:
             remaining = num_circles - len(circles_final)
             circle_image_min, num_generated_min, circles_min = generate_max_random_circles(
@@ -240,17 +233,8 @@ def encode(input_image, shape_type, output_path, **kwargs):
                 min_radius=min_radius_val,
                 max_radius=min_radius_val
             )
-            # Filter out any small circle that overlaps a large circle.
-            non_overlap_circles_min = []
-            for c in circles_min:
-                overlap = False
-                for cl in circles_max:
-                    if np.sqrt((c[0]-cl[0])**2 + (c[1]-cl[1])**2) < (c[2] + cl[2]):
-                        overlap = True
-                        break
-                if not overlap:
-                    non_overlap_circles_min.append(c)
-            circles_final = circles_max + non_overlap_circles_min
+            # Do not filter out overlaps: simply append.
+            circles_final = circles_max + circles_min
         resized_circle_image = resize_image_to_shape(circle_image_max, image_resized.shape[:2])
         averaged_circle_image = compute_average_under_circles(image_resized, resized_circle_image, circles_final)
         overlay_img = overlay_mask_on_image(image_resized, averaged_circle_image)
@@ -377,7 +361,12 @@ def decode(encoded_image, shape_type, boundaries=None):
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
         closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
         contours, _ = cv2.findContours(closed, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        areas = [cv2.contourArea(cnt) for cnt in contours if cv2.contourArea(cnt) > 0]
+        med_area = np.median(areas) if areas else 0
         for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if med_area > 0 and area > 2.0 * med_area:
+                continue
             x, y, w_rect, h_rect = cv2.boundingRect(cnt)
             if w_rect > 1 and h_rect > 1:
                 cv2.rectangle(annotated, (x, y), (x + w_rect, y + h_rect), (0, 255, 0), 1)
@@ -387,11 +376,25 @@ def decode(encoded_image, shape_type, boundaries=None):
                 rgb_values.append([r, g, b])
     elif shape_type in ['circle', 'circles']:
         ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
-        contours, _ = cv2.findContours(binary_image, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        # Apply a slight erosion to separate overlapping circles.
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        binary_eroded = cv2.erode(binary_image, kernel, iterations=1)
+        contours, _ = cv2.findContours(binary_eroded, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        areas = []
+        circle_info = []
         for cnt in contours:
             (x, y), radius = cv2.minEnclosingCircle(cnt)
+            if radius > 0:
+                area = np.pi * (radius**2)
+                areas.append(area)
+                circle_info.append(((x, y), radius))
+        med_area = np.median(areas) if areas else 0
+        for ((x, y), radius) in circle_info:
             center = (int(x), int(y))
             radius = int(radius)
+            area = np.pi * (radius**2)
+            if med_area > 0 and area > 2.0 * med_area:
+                continue
             if radius > 3 and radius < 250:
                 cv2.circle(annotated, center, radius, (0, 255, 0), 1)
                 b, g, r = encoded_image[center[1], center[0]]
