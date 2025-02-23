@@ -202,9 +202,9 @@ def shape_detector_app():
             for idx, (color, count) in enumerate(grouped_colors):
                 rgb_str = f"RGB: {color} - Count: {count}"
                 color_box = f"background-color: rgb({color[0]}, {color[1]}, {color[2]}); height: 30px; width: 30px; margin-right: 10px; display: inline-block;"
-                # Wrap the block in a clickable link that sets mode and selected_color.
+                # Wrap the block in a clickable link with target="_self" so it navigates in the same tab.
                 link = f"?mode=Recipe%20Generator&selected_color={color[0]},{color[1]},{color[2]}"
-                clickable_html = f"<a href='{link}' style='text-decoration:none; color: inherit;'><div style='{color_box}'></div> {rgb_str}</a>"
+                clickable_html = f"<a href='{link}' target='_self' style='text-decoration:none; color: inherit;'><div style='{color_box}'></div> {rgb_str}</a>"
                 if idx % 3 == 0:
                     with col1c:
                         st.markdown(clickable_html, unsafe_allow_html=True)
