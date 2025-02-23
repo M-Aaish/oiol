@@ -374,14 +374,13 @@ def decode(encoded_image, shape_type, boundaries=None):
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
         closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
         contours, _ = cv2.findContours(closed, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-        areas = [cv2.contourArea(cnt) for cnt in contours if cv2.contourArea(cnt) > 0]
-        med_area = np.median(areas) if areas else 0
+        max_size = kwargs.get('max_size', None)
         for cnt in contours:
-            area = cv2.contourArea(cnt)
-            #if med_area > 0 and area >  med_area:
-             #   continue
             x, y, w_rect, h_rect = cv2.boundingRect(cnt)
             if w_rect > 1 and h_rect > 1:
+                if max_size is not None:
+                    if w_rect > max_size or h_rect > max_size:
+                        continue
                 cv2.rectangle(annotated, (x, y), (x + w_rect, y + h_rect), (0, 255, 0), 1)
                 center_x = x + w_rect // 2
                 center_y = y + h_rect // 2
@@ -390,21 +389,14 @@ def decode(encoded_image, shape_type, boundaries=None):
     elif shape_type in ['circle', 'circles']:
         ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
         contours, _ = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-        areas = []
-        circle_info = []
+        max_radius = kwargs.get('max_radius', None)
         for cnt in contours:
             (x, y), radius = cv2.minEnclosingCircle(cnt)
-            if radius > 0:
-                area = np.pi * (radius**2)
-                areas.append(area)
-                circle_info.append(((x, y), radius))
-        med_area = np.median(areas) if areas else 0
-        for ((x, y), radius) in circle_info:
             center = (int(x), int(y))
             radius = int(radius)
-            area = np.pi * (radius**2)
-            #if med_area > 0 and area >  med_area:
-             #   continue
+            if max_radius is not None:
+                if radius > max_radius:
+                    continue
             if radius > 3 and radius < 250:
                 cv2.circle(annotated, center, radius, (0, 255, 0), 1)
                 b, g, r = encoded_image[center[1], center[0]]
