@@ -202,18 +202,15 @@ def shape_detector_app():
             for idx, (color, count) in enumerate(grouped_colors):
                 rgb_str = f"RGB: {color} - Count: {count}"
                 color_box = f"background-color: rgb({color[0]}, {color[1]}, {color[2]}); height: 30px; width: 30px; margin-right: 10px; display: inline-block;"
-                # Wrap the block in a clickable link with target="_self" so it navigates in the same tab.
-                link = f"?mode=Recipe%20Generator&selected_color={color[0]},{color[1]},{color[2]}"
-                clickable_html = f"<a href='{link}' target='_self' style='text-decoration:none; color: inherit;'><div style='{color_box}'></div> {rgb_str}</a>"
                 if idx % 3 == 0:
                     with col1c:
-                        st.markdown(clickable_html, unsafe_allow_html=True)
+                        st.markdown(f"<div style='{color_box}'></div> {rgb_str}", unsafe_allow_html=True)
                 elif idx % 3 == 1:
                     with col2c:
-                        st.markdown(clickable_html, unsafe_allow_html=True)
+                        st.markdown(f"<div style='{color_box}'></div> {rgb_str}", unsafe_allow_html=True)
                 else:
                     with col3c:
-                        st.markdown(clickable_html, unsafe_allow_html=True)
+                        st.markdown(f"<div style='{color_box}'></div> {rgb_str}", unsafe_allow_html=True)
             is_success, buffer = cv2.imencode(".png", annotated_img)
             if is_success:
                 st.download_button(
@@ -567,31 +564,17 @@ def show_create_custom_db_page():
 def painter_recipe_generator():
     st.title("Painter App - Recipe Generator")
     st.write("Enter your desired paint color to generate paint recipes using base colors.")
-    
-    # Check for a preselected color from query parameters
-    query_params = st.query_params
-    if "selected_color" in query_params:
-        try:
-            r_val, g_val, b_val = map(int, query_params["selected_color"][0].split(","))
-            default_hex = rgb_to_hex(r_val, g_val, b_val)
-        except Exception:
-            default_hex = "#ffffff"
-            r_val, g_val, b_val = 255, 255, 255
-    else:
-        default_hex = "#ffffff"
-        r_val, g_val, b_val = 255, 255, 255
-
     db_choice = st.selectbox("Select a color database:", list(databases.keys()))
     selected_db_dict = convert_db_list_to_dict(databases[db_choice])
     method = st.radio("Select input method:", ["Color Picker", "RGB Sliders"])
     if method == "Color Picker":
-        desired_hex = st.color_picker("Pick a color", default_hex)
+        desired_hex = st.color_picker("Pick a color", "#ffffff")
         desired_rgb = tuple(int(desired_hex[i:i+2], 16) for i in (1, 3, 5))
     else:
         st.write("Select RGB values manually:")
-        r = st.slider("Red", 0, 255, r_val)
-        g = st.slider("Green", 0, 255, g_val)
-        b = st.slider("Blue", 0, 255, b_val)
+        r = st.slider("Red", 0, 255, 255)
+        g = st.slider("Green", 0, 255, 255)
+        b = st.slider("Blue", 0, 255, 255)
         desired_rgb = (r, g, b)
         desired_hex = rgb_to_hex(r, g, b)
     st.write("**Desired Color:**", desired_hex)
@@ -671,13 +654,14 @@ def main():
         else:
             st.warning("Automatic refresh is not supported. Please manually reload your browser.")
     
-    # Read query parameters to see if a mode is specified
-    query_params = st.query_params
-    mode_options = ["Image Generator", "Shape Detector", "Oil Painting Generator", "Colour Merger", "Recipe Generator", "Colors DataBase"]
-    default_mode = query_params.get("mode", ["Image Generator"])[0]
-    mode_index = mode_options.index(default_mode) if default_mode in mode_options else 0
-
-    app_mode = st.sidebar.radio("Select Mode", mode_options, index=mode_index)
+    app_mode = st.sidebar.radio("Select Mode", [
+        "Image Generator", 
+        "Shape Detector", 
+        "Oil Painting Generator", 
+        "Colour Merger", 
+        "Recipe Generator", 
+        "Colors DataBase"
+    ])
     
     if app_mode == "Image Generator":
         image_generator_app()
