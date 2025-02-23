@@ -178,6 +178,11 @@ def shape_detector_app():
     st.header("Shape Detector")
     uploaded_file = st.file_uploader("Upload an Encoded Image", type=["jpg", "jpeg", "png"])
     shape_option = st.selectbox("Select Shape", ["Triangle", "Rectangle", "Circle"])
+    # For Rectangle and Circle, ask for the max detection size.
+    if shape_option == "Rectangle":
+        max_size_detect = st.number_input("Enter maximum size for detection (Rectangle):", min_value=1, value=15)
+    elif shape_option == "Circle":
+        max_radius_detect = st.number_input("Enter maximum radius for detection (Circle):", min_value=1, value=15)
     col1, col2 = st.columns([1, 1])
     if uploaded_file is not None:
         file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
@@ -191,7 +196,13 @@ def shape_detector_app():
     if st.button("Decode"):
         if uploaded_file is not None:
             shape = shape_option
-            binary_img, annotated_img, rgb_vals = decode(encoded_image, shape, boundaries=None)
+            # Pass the max size for detection if applicable.
+            if shape_option == "Rectangle":
+                binary_img, annotated_img, rgb_vals = decode(encoded_image, shape, boundaries=None, max_size=max_size_detect)
+            elif shape_option == "Circle":
+                binary_img, annotated_img, rgb_vals = decode(encoded_image, shape, boundaries=None, max_radius=max_radius_detect)
+            else:
+                binary_img, annotated_img, rgb_vals = decode(encoded_image, shape, boundaries=None)
             grouped_colors = group_similar_colors(rgb_vals, threshold=10)
             grouped_colors = sorted(grouped_colors, key=lambda x: x[1], reverse=True)
             annotated_img_rgb = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
@@ -221,7 +232,6 @@ def shape_detector_app():
                 )
         else:
             st.warning("Please upload an image first.")
-
 # --------------------------------------------------------------------
 # --- Functions from painter2.py (Painter App - Recipe Generator and Colors DataBase)
 # --------------------------------------------------------------------
