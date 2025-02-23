@@ -569,7 +569,7 @@ def painter_recipe_generator():
     st.write("Enter your desired paint color to generate paint recipes using base colors.")
     
     # Check for a preselected color from query parameters
-    query_params = st.experimental_get_query_params()
+    query_params = st.query_params()
     if "selected_color" in query_params:
         try:
             r_val, g_val, b_val = map(int, query_params["selected_color"][0].split(","))
@@ -672,7 +672,7 @@ def main():
             st.warning("Automatic refresh is not supported. Please manually reload your browser.")
     
     # Read query parameters to see if a mode is specified
-    query_params = st.experimental_get_query_params()
+    query_params = st.query_params()
     mode_options = ["Image Generator", "Shape Detector", "Oil Painting Generator", "Colour Merger", "Recipe Generator", "Colors DataBase"]
     default_mode = query_params.get("mode", ["Image Generator"])[0]
     mode_index = mode_options.index(default_mode) if default_mode in mode_options else 0
