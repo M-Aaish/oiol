@@ -77,58 +77,48 @@ def overlay_mask_on_image(input_image, mask_image):
 def encode(input_image, shape_type, output_path, **kwargs):
     shape_type = shape_type.lower()
     if shape_type in ['triangle', 'triangles']:
-        # New triangle encoding using your provided Delaunay-based logic
-        image_resized = cv2.resize(input_image, (500, 500))
-        padding = 30  # Add padding to ensure boundary triangles are included
+        image_orig = input_image
+        image_resized = cv2.resize(image_orig, (500, 500))
+        padding = 30
         image_padded = cv2.copyMakeBorder(image_resized, padding, padding, padding, padding, cv2.BORDER_REFLECT)
-        height, width = image_padded.shape[:2]
-        
-        # Use user-specified number of triangles (default 510)
-        num_triangles = kwargs.get('num_shapes', 510)
-        num_points = num_triangles + 2  # Delaunay triangulation requires num_triangles+2 points
-        
-        # Generate random points within the padded image dimensions
-        points = np.array([[random.randint(0, width), random.randint(0, height)] for _ in range(num_points)])
-        
-        # Apply Delaunay triangulation on the points
-        triangles = Delaunay(points)
-        
-        # Create a copy of the resized (unpadded) image to draw the triangles on
-        final_image = image_resized.copy()
+        h_pad, w_pad, _ = image_padded.shape
+        num_triangles = kwargs.get('num_triangles', kwargs.get('num_shapes', 510))
+        shape_size = kwargs.get('shape_size', None)
+        if shape_size is not None:
+            x_coords = np.arange(0, w_pad, shape_size)
+            y_coords = np.arange(0, h_pad, shape_size)
+            xx, yy = np.meshgrid(x_coords, y_coords)
+            grid_points = np.vstack([xx.ravel(), yy.ravel()]).T
+            jitter = 0.1 * shape_size
+            grid_points = grid_points + np.random.uniform(-jitter, jitter, grid_points.shape)
+            points = grid_points
+        else:
+            points = np.array([[random.randint(0, w_pad), random.randint(0, h_pad)] for _ in range(num_triangles + 2)])
+        tri = Delaunay(points)
+        all_triangles = tri.simplices
+        user_num = kwargs.get('num_shapes', None)
+        if user_num is not None and user_num < len(all_triangles):
+            indices = np.random.choice(len(all_triangles), user_num, replace=False)
+            tri_simplices = all_triangles[indices]
+        else:
+            tri_simplices = all_triangles
+        overlay_img = image_resized.copy()
         boundaries = []
-        
-        # Loop through each triangle from the triangulation
-        for simplex in triangles.simplices:
-            # Get the vertices of the triangle
+        for simplex in tri_simplices:
             triangle_points = points[simplex]
-            
-            # Adjust the triangle points back to the original image by subtracting padding
-            triangle_points_no_padding = triangle_points - [padding, padding]
-            boundaries.append(triangle_points_no_padding)
-            
-            # Create a mask for the triangle in the padded image
-            mask = np.zeros((height, width), dtype=np.uint8)
+            triangle_pts_no_padding = triangle_points - [padding, padding]
+            boundaries.append(triangle_pts_no_padding)
+            mask = np.zeros((h_pad, w_pad), dtype=np.uint8)
             cv2.fillConvexPoly(mask, np.int32(triangle_points), 255)
             masked_image = cv2.bitwise_and(image_padded, image_padded, mask=mask)
-            
-            # Calculate the average color of the triangle region
-            avg_color = cv2.mean(masked_image, mask=mask)[:3]  # Extract RGB values
-            # Convert avg_color to BGR format (as OpenCV uses BGR)
+            avg_color = cv2.mean(masked_image, mask=mask)[:3]
             avg_color_bgr = tuple(map(int, (avg_color[2], avg_color[1], avg_color[0])))
-            
-            # Create an overlay and fill the triangle on it
-            overlay = final_image.copy()
-            cv2.fillConvexPoly(overlay, np.int32(triangle_points_no_padding), avg_color_bgr)
-            
-            # Blend the overlay with the final image using reduced opacity
+            overlay_temp = overlay_img.copy()
+            cv2.fillConvexPoly(overlay_temp, np.int32(triangle_pts_no_padding), avg_color_bgr)
             alpha = 0.7
-            final_image = cv2.addWeighted(final_image, 1 - alpha, overlay, alpha, 0)
-        
-        # Set overlay_img to the final blended image (so that later encoding steps work)
-        overlay_img = final_image.copy()
+            overlay_img = cv2.addWeighted(overlay_img, 1 - alpha, overlay_temp, alpha, 0)
         original_resized = image_resized
 
-    
     elif shape_type in ['rectangle', 'rectangles']:
         image_orig = input_image
         image_resized = cv2.resize(image_orig, (256, 256))
