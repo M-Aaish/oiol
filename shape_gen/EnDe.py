@@ -124,16 +124,7 @@ def encode(input_image, shape_type, output_path, **kwargs):
         
         original_resized = image_resized
 
-    elif shape_type in ['rectangle', 'rectangles']:
-        # ... (existing rectangle branch remains unchanged)
-        pass
-    elif shape_type in ['circle', 'circles']:
-        # ... (existing circle branch remains unchanged)
-        pass
-    else:
-        raise ValueError("Unsupported shape type. Choose from 'triangles', 'rectangles', or 'circles'.")
     
-      
     elif shape_type in ['rectangle', 'rectangles']:
         image_orig = input_image
         image_resized = cv2.resize(image_orig, (256, 256))
