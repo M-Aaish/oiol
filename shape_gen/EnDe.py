@@ -77,46 +77,42 @@ def overlay_mask_on_image(input_image, mask_image):
 def encode(input_image, shape_type, output_path, **kwargs):
     shape_type = shape_type.lower()
     if shape_type in ['triangle', 'triangles']:
-        # New triangle encoding code based on the provided script
-        image_resized = cv2.resize(input_image, (500, 500))
-        padding = 30
+        # New triangle encoding using provided Delaunay-based logic
+        image_orig = input_image
+        image_resized = cv2.resize(image_orig, (500, 500))
+        padding = 30  # Padding to ensure boundary triangles are included
         image_padded = cv2.copyMakeBorder(image_resized, padding, padding, padding, padding, cv2.BORDER_REFLECT)
-        h_pad, w_pad, _ = image_padded.shape
-        num_triangles = kwargs.get('num_shapes', 510)
-        num_points = num_triangles + 2  # Delaunay requires num_triangles+2 points
+        height, width = image_padded.shape[:2]
         
-        # Use grid-based points if 'shape_size' is provided, otherwise use random points
-        if 'shape_size' in kwargs:
-            shape_size = kwargs['shape_size']
-            x_coords = np.arange(0, w_pad, shape_size)
-            y_coords = np.arange(0, h_pad, shape_size)
-            xx, yy = np.meshgrid(x_coords, y_coords)
-            grid_points = np.vstack([xx.ravel(), yy.ravel()]).T
-            jitter = 0.1 * shape_size
-            points = grid_points + np.random.uniform(-jitter, jitter, grid_points.shape)
-        else:
-            points = np.array([[random.randint(0, w_pad), random.randint(0, h_pad)] for _ in range(num_points)])
+        # Use the user-specified number of triangles (default 510)
+        num_triangles = kwargs.get('num_shapes', 510)
+        num_points = num_triangles + 2  # Delaunay triangulation requires num_triangles+2 points
+        
+        # Generate random points within the padded image dimensions
+        points = np.array([[random.randint(0, width), random.randint(0, height)] for _ in range(num_points)])
         
         # Apply Delaunay triangulation on the points
-        tri = Delaunay(points)
+        triangles = Delaunay(points)
         
-        # Create a copy of the resized (unpadded) image for drawing triangles
+        # Create a copy of the original (resized) image to draw the triangles on
         final_image = image_resized.copy()
         boundaries = []
         
-        # Loop through each triangle from the triangulation
-        for simplex in tri.simplices:
+        # Loop through each triangle
+        for simplex in triangles.simplices:
+            # Get the vertices of the triangle
             triangle_points = points[simplex]
-            # Adjust triangle points back to the unpadded image
+            
+            # Adjust the triangle points back to the original image by subtracting padding
             triangle_points_no_padding = triangle_points - [padding, padding]
             boundaries.append(triangle_points_no_padding)
             
-            # Create a mask for the triangle region on the padded image
-            mask = np.zeros((h_pad, w_pad), dtype=np.uint8)
+            # Create a mask for the triangle in the padded image
+            mask = np.zeros((height, width), dtype=np.uint8)
             cv2.fillConvexPoly(mask, np.int32(triangle_points), 255)
             masked_image = cv2.bitwise_and(image_padded, image_padded, mask=mask)
             
-            # Calculate the average color in the triangle region (converted from RGB to BGR)
+            # Calculate the average color of the triangle region (convert from RGB to BGR)
             avg_color = cv2.mean(masked_image, mask=mask)[:3]
             avg_color_bgr = tuple(map(int, (avg_color[2], avg_color[1], avg_color[0])))
             
@@ -127,6 +123,16 @@ def encode(input_image, shape_type, output_path, **kwargs):
             final_image = cv2.addWeighted(final_image, 1 - alpha, overlay, alpha, 0)
         
         original_resized = image_resized
+
+    elif shape_type in ['rectangle', 'rectangles']:
+        # ... (existing rectangle branch remains unchanged)
+        pass
+    elif shape_type in ['circle', 'circles']:
+        # ... (existing circle branch remains unchanged)
+        pass
+    else:
+        raise ValueError("Unsupported shape type. Choose from 'triangles', 'rectangles', or 'circles'.")
+    
       
     elif shape_type in ['rectangle', 'rectangles']:
         image_orig = input_image
