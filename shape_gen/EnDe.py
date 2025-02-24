@@ -77,48 +77,52 @@ def overlay_mask_on_image(input_image, mask_image):
 def encode(input_image, shape_type, output_path, **kwargs):
     shape_type = shape_type.lower()
     if shape_type in ['triangle', 'triangles']:
+        # New triangle encoding using Delaunay triangulation and blending.
         image_orig = input_image
         image_resized = cv2.resize(image_orig, (500, 500))
         padding = 30
         image_padded = cv2.copyMakeBorder(image_resized, padding, padding, padding, padding, cv2.BORDER_REFLECT)
         h_pad, w_pad, _ = image_padded.shape
-        num_triangles = kwargs.get('num_triangles', kwargs.get('num_shapes', 510))
-        shape_size = kwargs.get('shape_size', None)
-        if shape_size is not None:
-            x_coords = np.arange(0, w_pad, shape_size)
-            y_coords = np.arange(0, h_pad, shape_size)
-            xx, yy = np.meshgrid(x_coords, y_coords)
-            grid_points = np.vstack([xx.ravel(), yy.ravel()]).T
-            jitter = 0.1 * shape_size
-            grid_points = grid_points + np.random.uniform(-jitter, jitter, grid_points.shape)
-            points = grid_points
-        else:
-            points = np.array([[random.randint(0, w_pad), random.randint(0, h_pad)] for _ in range(num_triangles + 2)])
+        
+        # Use the user-specified number of triangles (default 510)
+        num_triangles = kwargs.get('num_shapes', 510)
+        num_points = num_triangles + 2  # Delaunay requires num_triangles + 2 points
+        
+        # Generate random points within the padded image dimensions
+        points = np.array([[random.randint(0, w_pad), random.randint(0, h_pad)] for _ in range(num_points)])
+        
+        # Apply Delaunay triangulation
         tri = Delaunay(points)
-        all_triangles = tri.simplices
-        user_num = kwargs.get('num_shapes', None)
-        if user_num is not None and user_num < len(all_triangles):
-            indices = np.random.choice(len(all_triangles), user_num, replace=False)
-            tri_simplices = all_triangles[indices]
-        else:
-            tri_simplices = all_triangles
-        overlay_img = image_resized.copy()
+        triangles = tri.simplices
+        
+        # Create a copy of the resized image (without padding) to blend triangles on
+        final_image = image_resized.copy()
         boundaries = []
-        for simplex in tri_simplices:
+        
+        # Loop through each triangle from the triangulation
+        for simplex in triangles:
             triangle_points = points[simplex]
-            triangle_pts_no_padding = triangle_points - [padding, padding]
-            boundaries.append(triangle_pts_no_padding)
+            # Adjust the triangle points back to the original (unpadded) image
+            triangle_points_no_padding = triangle_points - [padding, padding]
+            boundaries.append(triangle_points_no_padding)
+            
+            # Create a mask for the triangle on the padded image
             mask = np.zeros((h_pad, w_pad), dtype=np.uint8)
             cv2.fillConvexPoly(mask, np.int32(triangle_points), 255)
             masked_image = cv2.bitwise_and(image_padded, image_padded, mask=mask)
+            
+            # Calculate the average color of the triangle region (in RGB)
             avg_color = cv2.mean(masked_image, mask=mask)[:3]
+            # Convert average color from RGB to BGR
             avg_color_bgr = tuple(map(int, (avg_color[2], avg_color[1], avg_color[0])))
-            overlay_temp = overlay_img.copy()
-            cv2.fillConvexPoly(overlay_temp, np.int32(triangle_pts_no_padding), avg_color_bgr)
+            
+            # Create an overlay to blend the triangle
+            overlay = final_image.copy()
+            cv2.fillConvexPoly(overlay, np.int32(triangle_points_no_padding), avg_color_bgr)
             alpha = 0.7
-            overlay_img = cv2.addWeighted(overlay_img, 1 - alpha, overlay_temp, alpha, 0)
+            final_image = cv2.addWeighted(final_image, 1 - alpha, overlay, alpha, 0)
+        
         original_resized = image_resized
-
     elif shape_type in ['rectangle', 'rectangles']:
         image_orig = input_image
         image_resized = cv2.resize(image_orig, (256, 256))
