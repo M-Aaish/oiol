@@ -725,7 +725,7 @@ def main():
     elif app_mode == "Colors DataBase":
         painter_colors_database()
     elif app_mode == "Shape Art Generator":  # <-- New condition
-    shape_art_generator_page()    
+        shape_art_generator_page()    
 
 if __name__ == "__main__":
     main()
