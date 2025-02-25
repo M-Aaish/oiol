@@ -133,10 +133,10 @@ def image_generator_app():
     st.header("Image Generator")
     uploaded_file = st.file_uploader("Upload an Image", type=["jpg", "jpeg", "png"])
     shape_option = st.selectbox("Select Shape", ["Triangle", "Rectangle", "Circle"])
-    num_shapes = st.number_input("Enter the number of shapes to encode:", min_value=1, value=10)
+    num_shapes = st.number_input("Enter the number of shapes to encode:", min_value=1, value=100)
     if shape_option == "Triangle":
-        max_triangle_size = st.number_input("Enter the maximum triangle size:", min_value=1, value=10)
-        min_triangle_size = st.number_input("Enter the minimum triangle size (for filling gaps):", min_value=1, value=5)
+        max_triangle_size = st.number_input("Enter the maximum triangle size:", min_value=1, value=50)
+        min_triangle_size = st.number_input("Enter the minimum triangle size (for filling gaps):", min_value=1, value=15)
     elif shape_option in ["Rectangle", "Circle"]:
         min_size = st.number_input("Enter the minimum size of the shape:", min_value=1, value=10)
         max_size = st.number_input("Enter the maximum size of the shape:", min_value=1, value=15)
