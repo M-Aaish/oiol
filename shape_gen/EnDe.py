@@ -425,7 +425,7 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
             center_y = int(np.clip(center[1], 0, h - 1))
             b, g, r = encoded_image[center_y, center_x]
             rgb_values.append([r, g, b])
-    elif shape_type in ['rectangle', 'rectangles']:
+      elif shape_type in ['rectangle', 'rectangles']:
         ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
         closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
@@ -445,6 +445,7 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
                 rgb_values.append([r, g, b])
     elif shape_type in ['circle', 'circles']:
         ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
+        # Apply a slight erosion to separate overlapping circles.
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
         binary_eroded = cv2.erode(binary_image, kernel, iterations=1)
         contours, _ = cv2.findContours(binary_eroded, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
