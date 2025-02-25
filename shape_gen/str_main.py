@@ -185,6 +185,9 @@ def shape_detector_app():
     st.header("Shape Detector")
     uploaded_file = st.file_uploader("Upload an Encoded Image", type=["jpg", "jpeg", "png"])
     shape_option = st.selectbox("Select Shape", ["Triangle", "Rectangle", "Circle"])
+    # Add two number inputs for minimum and maximum size detection.
+    min_size_det = st.number_input("Enter the minimum size to detect:", min_value=1, value=3)
+    max_size_det = st.number_input("Enter the maximum size to detect:", min_value=1, value=10)
     if uploaded_file is not None:
         file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
         encoded_image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
@@ -196,11 +199,36 @@ def shape_detector_app():
     if st.button("Decode"):
         if uploaded_file is not None:
             shape = shape_option
-            if shape_option == "Triangle":
-                max_triangle_size = st.number_input("Enter the maximum triangle size to decode:", min_value=1, value=10)
-                binary_img, annotated_img, rgb_vals = decode(encoded_image, shape, boundaries=None, max_size=max_triangle_size)
-            else:
-                binary_img, annotated_img, rgb_vals = decode(encoded_image, shape, boundaries=None)
+            # Compute detected boundaries externally based on user-provided size limits.
+            gray = cv2.cvtColor(encoded_image, cv2.COLOR_BGR2GRAY)
+            ret, thresh = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
+            contours, _ = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+            detected_boundaries = []
+            if shape == "Triangle":
+                for cnt in contours:
+                    peri = cv2.arcLength(cnt, True)
+                    approx = cv2.approxPolyDP(cnt, 0.04 * peri, True)
+                    if len(approx) == 3:
+                        tri = approx.reshape(-1, 2)
+                        xs = tri[:, 0]
+                        ys = tri[:, 1]
+                        width = xs.max() - xs.min()
+                        height = ys.max() - ys.min()
+                        if width >= min_size_det and width <= max_size_det and height >= min_size_det and height <= max_size_det:
+                            detected_boundaries.append(tri)
+            elif shape == "Rectangle":
+                for cnt in contours:
+                    x, y, w, h = cv2.boundingRect(cnt)
+                    if w >= min_size_det and w <= max_size_det and h >= min_size_det and h <= max_size_det:
+                        detected_boundaries.append((x, y, w, h))
+            elif shape == "Circle":
+                for cnt in contours:
+                    (x, y), radius = cv2.minEnclosingCircle(cnt)
+                    radius = int(radius)
+                    if radius >= min_size_det and radius <= max_size_det:
+                        detected_boundaries.append((int(x), int(y), radius))
+            # Pass the detected boundaries to the decode function (along with min and max sizes)
+            binary_img, annotated_img, rgb_vals = decode(encoded_image, shape, boundaries=detected_boundaries, max_size=max_size_det, min_size=min_size_det)
             grouped_colors = group_similar_colors(rgb_vals, threshold=10)
             grouped_colors = sorted(grouped_colors, key=lambda x: x[1], reverse=True)
             annotated_img_rgb = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
