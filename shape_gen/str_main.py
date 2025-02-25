@@ -3,7 +3,7 @@ try:
     from streamlit.runtime.scriptrunner import RerunException, RerunData
 except ImportError:
     RerunException = None
-
+from shape_art_generator import main_page as shape_art_generator_page
 from io import BytesIO
 from PIL import Image
 import numpy as np
@@ -702,13 +702,15 @@ def main():
             st.warning("Automatic refresh is not supported. Please manually reload your browser.")
     
     app_mode = st.sidebar.radio("Select Mode", [
-        "Image Generator", 
-        "Shape Detector", 
-        "Oil Painting Generator", 
-        "Colour Merger", 
-        "Recipe Generator", 
-        "Colors DataBase"
-    ])
+    "Image Generator", 
+    "Shape Detector", 
+    "Oil Painting Generator", 
+    "Colour Merger", 
+    "Recipe Generator", 
+    "Colors DataBase",
+    "Shape Art Generator"  # <-- New page added here
+])
+
     
     if app_mode == "Image Generator":
         image_generator_app()
@@ -722,6 +724,8 @@ def main():
         painter_recipe_generator()
     elif app_mode == "Colors DataBase":
         painter_colors_database()
+    elif app_mode == "Shape Art Generator":  # <-- New condition
+    shape_art_generator_page()    
 
 if __name__ == "__main__":
     main()
