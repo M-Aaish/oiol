@@ -408,23 +408,29 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
     annotated = encoded_image.copy()
     if shape_type in ['triangle', 'triangles']:
         if boundaries is None:
-        # Threshold the LSB image
+        # 1) Threshold the extracted LSB image
             ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
-        
-        # ---- ADD THESE LINES (Morphological Close) ----
-            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-            closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
-        # Now find contours on 'closed' instead of 'thresh'
-            contours, _ = cv2.findContours(closed, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-        # ------------------------------------------------
-        
+
+        # 2) Make the boundary thicker (dilate), then close small gaps
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+            dilated = cv2.dilate(thresh, kernel, iterations=1)
+            closed = cv2.morphologyEx(dilated, cv2.MORPH_CLOSE, kernel, iterations=1)
+
+        # 3) Find contours on the processed mask
+            contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
             boundaries = []
             min_size = kwargs.get('min_size', None)
             max_size = kwargs.get('max_size', None)
-        
+
+        # 4) Approximate contours to polygons; filter only triangles
             for cnt in contours:
+            # Skip very tiny/noisy contours
+                if cv2.contourArea(cnt) < 5:
+                    continue
+
                 peri = cv2.arcLength(cnt, True)
-                approx = cv2.approxPolyDP(cnt, 0.04 * peri, True)
+                approx = cv2.approxPolyDP(cnt, 0.03 * peri, True)  # slightly smaller epsilon than 0.04
                 if len(approx) == 3:
                     tri = approx.reshape(-1, 2)
                     xs = tri[:, 0]
@@ -432,7 +438,7 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
                     width = xs.max() - xs.min()
                     height = ys.max() - ys.min()
 
-                # Check optional min_size / max_size
+                # Check optional min_size / max_size constraints
                     if min_size is not None:
                         if width < min_size or height < min_size:
                             continue
@@ -442,7 +448,7 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
 
                     boundaries.append(tri)
 
-    # The rest of your existing code for drawing/annotating the triangles remains unchanged.
+    # 5) Draw/annotate the triangles we found
         for tri in boundaries:
             pts = np.int32(tri)
             cv2.polylines(annotated, [pts], isClosed=True, color=(0, 255, 0), thickness=1)
@@ -451,8 +457,6 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
             center_y = int(np.clip(center[1], 0, h - 1))
             b, g, r = encoded_image[center_y, center_x]
             rgb_values.append([r, g, b])
-
-   
 
     elif shape_type in ['rectangle', 'rectangles']:
         ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
