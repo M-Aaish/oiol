@@ -407,15 +407,17 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
     rgb_values = []
     annotated = encoded_image.copy()
     if shape_type in ['triangle', 'triangles']:
+        # If boundaries are not provided, use Canny edge detection to extract triangles.
         if boundaries is None:
-            ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
-            contours, _ = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+            gray = cv2.cvtColor(encoded_image, cv2.COLOR_BGR2GRAY)
+            edges = cv2.Canny(gray, 50, 150)
+            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             boundaries = []
             min_size = kwargs.get('min_size', None)
             max_size = kwargs.get('max_size', None)
             for cnt in contours:
                 peri = cv2.arcLength(cnt, True)
-                approx = cv2.approxPolyDP(cnt, 0.04 * peri, True)
+                approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
                 if len(approx) == 3:
                     tri = approx.reshape(-1, 2)
                     xs = tri[:, 0]
