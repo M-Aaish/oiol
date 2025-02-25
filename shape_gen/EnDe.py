@@ -121,25 +121,27 @@ def generate_random_triangle(image_shape, min_size, max_size):
 def encode(input_image, shape_type, output_path, **kwargs):
     shape_type = shape_type.lower()
     if shape_type in ['triangle', 'triangles']:
-        # --- New Triangle Encoding (from tri.py) ---
+        # --- New Triangle Encoding (from tri.py with modifications) ---
         image_resized = cv2.resize(input_image, (500, 500))
         num_triangles = kwargs.get('num_triangles', kwargs.get('num_shapes', 50))
-        min_size = kwargs.get('min_size', kwargs.get('shape_size', 20))
-        max_size = kwargs.get('max_size', 100)
+        # Use 'max_size' as the fixed triangle size for the first pass.
+        # Also allow a minimum triangle size for filling gaps.
+        max_triangle_size = kwargs.get('max_size', 100)
+        min_triangle_size = kwargs.get('min_size', max_triangle_size // 2)
         
         # Pad the image so that triangles can be placed on/near the boundary.
-        padding = max_size
+        padding = max_triangle_size
         image_padded = cv2.copyMakeBorder(image_resized, padding, padding, padding, padding, cv2.BORDER_REFLECT)
         
         # Create a global mask for the padded image to ensure non-overlap.
         global_mask = np.zeros(image_padded.shape[:2], dtype=np.uint8)
         triangles = []
         attempts = 0
-        max_attempts = num_triangles * 100  # Prevent infinite loops
+        max_attempts = num_triangles * 100
 
-        # First pass: use random sizes between min_size and max_size
+        # First pass: fill with fixed max-sized triangles
         while len(triangles) < num_triangles and attempts < max_attempts:
-            candidate = generate_random_triangle(image_padded.shape[:2], min_size, max_size)
+            candidate = generate_random_triangle(image_padded.shape[:2], max_triangle_size, max_triangle_size)
             candidate_mask = np.zeros(image_padded.shape[:2], dtype=np.uint8)
             cv2.fillConvexPoly(candidate_mask, candidate, 255)
             overlap = cv2.bitwise_and(global_mask, candidate_mask)
@@ -148,10 +150,10 @@ def encode(input_image, shape_type, output_path, **kwargs):
                 global_mask = cv2.bitwise_or(global_mask, candidate_mask)
             attempts += 1
 
-        # Second pass: if not enough, try with fixed min_size (smaller triangles)
+        # Second pass: fill remaining spaces with random-sized triangles between min and max
         attempts = 0
         while len(triangles) < num_triangles and attempts < max_attempts:
-            candidate = generate_random_triangle(image_padded.shape[:2], min_size, min_size)
+            candidate = generate_random_triangle(image_padded.shape[:2], min_triangle_size, max_triangle_size)
             candidate_mask = np.zeros(image_padded.shape[:2], dtype=np.uint8)
             cv2.fillConvexPoly(candidate_mask, candidate, 255)
             overlap = cv2.bitwise_and(global_mask, candidate_mask)
@@ -423,8 +425,20 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
     rgb_values = []
     annotated = encoded_image.copy()
     if shape_type in ['triangle', 'triangles']:
-        # --- New Triangle Decoding (from tri.py) ---
+        # --- New Triangle Decoding (from tri.py with modifications) ---
         triangles = boundaries if boundaries is not None else []
+        # Filter triangles by maximum size if provided
+        max_triangle_size = kwargs.get('max_size', None)
+        if max_triangle_size is not None:
+            filtered_triangles = []
+            for tri in triangles:
+                xs = tri[:, 0]
+                ys = tri[:, 1]
+                width = xs.max() - xs.min()
+                height = ys.max() - ys.min()
+                if max(width, height) <= max_triangle_size:
+                    filtered_triangles.append(tri)
+            triangles = filtered_triangles
         for tri in triangles:
             pts = np.int32(tri)
             cv2.polylines(annotated, [pts], isClosed=True, color=(0, 255, 0), thickness=1)
