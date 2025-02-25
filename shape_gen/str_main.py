@@ -185,21 +185,28 @@ def shape_detector_app():
     st.header("Shape Detector")
     uploaded_file = st.file_uploader("Upload an Encoded Image", type=["jpg", "jpeg", "png"])
     shape_option = st.selectbox("Select Shape", ["Triangle", "Rectangle", "Circle"])
-    # Add two number inputs for minimum and maximum size detection.
     min_size_det = st.number_input("Enter the minimum size to detect:", min_value=1, value=3)
     max_size_det = st.number_input("Enter the maximum size to detect:", min_value=1, value=10)
+    
+    encoded_image = None
     if uploaded_file is not None:
         file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
         encoded_image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
         if encoded_image is None:
             st.error("Error reading the image. Please try another file.")
-        else:
-            encoded_image_rgb = cv2.cvtColor(encoded_image, cv2.COLOR_BGR2RGB)
-            st.image(encoded_image_rgb, caption="Uploaded Encoded Image", use_container_width=True)
+    
+    # Create two columns for side-by-side display.
+    col1, col2 = st.columns(2)
+    
+    if uploaded_file is not None and encoded_image is not None:
+        with col1:
+            uploaded_image_rgb = cv2.cvtColor(encoded_image, cv2.COLOR_BGR2RGB)
+            st.image(uploaded_image_rgb, caption="Uploaded Encoded Image", use_container_width=True)
+    
     if st.button("Decode"):
-        if uploaded_file is not None:
+        if uploaded_file is not None and encoded_image is not None:
             shape = shape_option
-            # Compute detected boundaries externally based on user-provided size limits.
+            # Detect boundaries based on user size limits.
             gray = cv2.cvtColor(encoded_image, cv2.COLOR_BGR2GRAY)
             ret, thresh = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
             contours, _ = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
@@ -227,12 +234,14 @@ def shape_detector_app():
                     radius = int(radius)
                     if radius >= min_size_det and radius <= max_size_det:
                         detected_boundaries.append((int(x), int(y), radius))
-            # Pass the detected boundaries to the decode function (along with min and max sizes)
+            # Decode using the detected boundaries.
             binary_img, annotated_img, rgb_vals = decode(encoded_image, shape, boundaries=detected_boundaries, max_size=max_size_det, min_size=min_size_det)
+            annotated_image_rgb = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
+            with col2:
+                st.image(annotated_image_rgb, caption=f"Decoded Annotated {shape_option} Image", use_container_width=True)
+            
             grouped_colors = group_similar_colors(rgb_vals, threshold=10)
             grouped_colors = sorted(grouped_colors, key=lambda x: x[1], reverse=True)
-            annotated_img_rgb = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
-            st.image(annotated_img_rgb, caption=f"Decoded Annotated {shape_option} Image", use_container_width=True)
             st.subheader("Grouped Colors (Ranked by Count)")
             col1c, col2c, col3c = st.columns(3)
             for idx, (color, count) in enumerate(grouped_colors):
@@ -247,6 +256,7 @@ def shape_detector_app():
                 else:
                     with col3c:
                         st.markdown(f"<div style='{color_box}'></div> {rgb_str}", unsafe_allow_html=True)
+            
             is_success, buffer = cv2.imencode(".png", annotated_img)
             if is_success:
                 st.download_button(
@@ -257,6 +267,7 @@ def shape_detector_app():
                 )
         else:
             st.warning("Please upload an image first.")
+
 
 # --------------------------------------------------------------------
 # --- Functions from painter2.py (Painter App - Recipe Generator and Colors DataBase)
