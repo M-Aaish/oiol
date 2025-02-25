@@ -134,8 +134,10 @@ def image_generator_app():
     uploaded_file = st.file_uploader("Upload an Image", type=["jpg", "jpeg", "png"])
     shape_option = st.selectbox("Select Shape", ["Triangle", "Rectangle", "Circle"])
     num_shapes = st.number_input("Enter the number of shapes to encode:", min_value=1, value=10)
-    # For rectangles and circles, ask for both min and max size.
-    if shape_option in ["Rectangle", "Circle"]:
+    if shape_option == "Triangle":
+        max_triangle_size = st.number_input("Enter the maximum triangle size:", min_value=1, value=10)
+        min_triangle_size = st.number_input("Enter the minimum triangle size (for filling gaps):", min_value=1, value=5)
+    elif shape_option in ["Rectangle", "Circle"]:
         min_size = st.number_input("Enter the minimum size of the shape:", min_value=1, value=10)
         max_size = st.number_input("Enter the maximum size of the shape:", min_value=1, value=15)
     else:
@@ -153,7 +155,12 @@ def image_generator_app():
     if st.button("Generate"):
         if uploaded_file is not None:
             shape = shape_option
-            if shape_option in ["Rectangle", "Circle"]:
+            if shape_option == "Triangle":
+                encoded_image, boundaries = encode(img, shape, output_path="",
+                                                   num_shapes=num_shapes,
+                                                   max_size=max_triangle_size,
+                                                   min_size=min_triangle_size)
+            elif shape_option in ["Rectangle", "Circle"]:
                 encoded_image, boundaries = encode(img, shape, output_path="",
                                                    num_shapes=num_shapes, min_size=min_size, max_size=max_size,
                                                    min_radius=min_size, max_radius=max_size)
@@ -178,12 +185,6 @@ def shape_detector_app():
     st.header("Shape Detector")
     uploaded_file = st.file_uploader("Upload an Encoded Image", type=["jpg", "jpeg", "png"])
     shape_option = st.selectbox("Select Shape", ["Triangle", "Rectangle", "Circle"])
-    # For Rectangle and Circle, ask for the max detection size.
-    if shape_option == "Rectangle":
-        max_size_detect = st.number_input("Enter maximum size for detection (Rectangle):", min_value=1, value=15)
-    elif shape_option == "Circle":
-        max_radius_detect = st.number_input("Enter maximum radius for detection (Circle):", min_value=1, value=15)
-    col1, col2 = st.columns([1, 1])
     if uploaded_file is not None:
         file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
         encoded_image = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
@@ -191,23 +192,19 @@ def shape_detector_app():
             st.error("Error reading the image. Please try another file.")
         else:
             encoded_image_rgb = cv2.cvtColor(encoded_image, cv2.COLOR_BGR2RGB)
-            with col1:
-                st.image(encoded_image_rgb, caption="Uploaded Encoded Image", use_container_width=True)
+            st.image(encoded_image_rgb, caption="Uploaded Encoded Image", use_container_width=True)
     if st.button("Decode"):
         if uploaded_file is not None:
             shape = shape_option
-            # Pass the max size for detection if applicable.
-            if shape_option == "Rectangle":
-                binary_img, annotated_img, rgb_vals = decode(encoded_image, shape, boundaries=None, max_size=max_size_detect)
-            elif shape_option == "Circle":
-                binary_img, annotated_img, rgb_vals = decode(encoded_image, shape, boundaries=None, max_radius=max_radius_detect)
+            if shape_option == "Triangle":
+                max_triangle_size = st.number_input("Enter the maximum triangle size to decode:", min_value=1, value=10)
+                binary_img, annotated_img, rgb_vals = decode(encoded_image, shape, boundaries=None, max_size=max_triangle_size)
             else:
                 binary_img, annotated_img, rgb_vals = decode(encoded_image, shape, boundaries=None)
             grouped_colors = group_similar_colors(rgb_vals, threshold=10)
             grouped_colors = sorted(grouped_colors, key=lambda x: x[1], reverse=True)
             annotated_img_rgb = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
-            with col2:
-                st.image(annotated_img_rgb, caption=f"Decoded Annotated {shape_option} Image", use_container_width=True)
+            st.image(annotated_img_rgb, caption=f"Decoded Annotated {shape_option} Image", use_container_width=True)
             st.subheader("Grouped Colors (Ranked by Count)")
             col1c, col2c, col3c = st.columns(3)
             for idx, (color, count) in enumerate(grouped_colors):
@@ -232,6 +229,7 @@ def shape_detector_app():
                 )
         else:
             st.warning("Please upload an image first.")
+
 # --------------------------------------------------------------------
 # --- Functions from painter2.py (Painter App - Recipe Generator and Colors DataBase)
 # --------------------------------------------------------------------
