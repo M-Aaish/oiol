@@ -31,7 +31,7 @@ def generate_max_random_circles(image_size=(512, 512), min_radius=50, max_radius
         remaining_space = total_space - used_space
 
         remaining_capacity = remaining_space / total_space
-        min_dynamic_radius = int(50 + (remaining_capacity * (max_radius - 50)))
+        min_dynamic_radius = int(min_radius + (remaining_capacity * (max_radius - min_radius)))
         max_dynamic_radius = int(min_dynamic_radius * 1.5)
         max_dynamic_radius = min(max_dynamic_radius, max_radius)
 
@@ -75,7 +75,7 @@ def overlay_mask_on_image(input_image, mask_image):
     return output_image
 
 # -----------------------------
-# Helper for Triangle Generation (from tri.py)
+# Triangle helper functions (from tri.py)
 # -----------------------------
 def generate_random_triangle(image_shape, min_size, max_size):
     """
@@ -84,44 +84,37 @@ def generate_random_triangle(image_shape, min_size, max_size):
     The triangle is generated within image_shape dimensions.
     """
     h, w = image_shape
-    # Pick a random size between min_size and max_size
     size = random.randint(min_size, max_size)
-    # Use a margin to ensure the triangle is fully inside the padded image
     margin = max_size
     center_x = random.randint(margin, w - margin)
     center_y = random.randint(margin, h - margin)
     center = np.array([center_x, center_y])
     
-    # Create a base equilateral triangle (centered at (0,0))
     base_triangle = np.array([
         [0, -size / math.sqrt(3)],
         [-size / 2, size / (2 * math.sqrt(3))],
         [size / 2, size / (2 * math.sqrt(3))]
     ])
     
-    # Apply a slight random distortion to each vertex to avoid perfect symmetry
     distortion = np.random.uniform(0.9, 1.1, base_triangle.shape)
     base_triangle = base_triangle * distortion
     
-    # Rotate the triangle by a random angle between 0 and 2pi
     angle = random.uniform(0, 2 * math.pi)
     rotation_matrix = np.array([
         [math.cos(angle), -math.sin(angle)],
         [math.sin(angle),  math.cos(angle)]
     ])
     rotated_triangle = base_triangle.dot(rotation_matrix.T)
-    
-    # Shift the triangle to the chosen center
     triangle = rotated_triangle + center
     return triangle.astype(np.int32)
 
 # -----------------------------
-# Modified Encode Function (with triangle branch replaced)
+# Modified Encode Function (triangle branch replaced)
 # -----------------------------
 def encode(input_image, shape_type, output_path, **kwargs):
     shape_type = shape_type.lower()
     if shape_type in ['triangle', 'triangles']:
-        # Use the triangle encode functionality from tri.py
+        # Use triangle encode functionality from tri.py
         image_resized = cv2.resize(input_image, (500, 500))
         num_triangles = kwargs.get('num_triangles', kwargs.get('num_shapes', 50))
         if 'min_size' in kwargs and 'max_size' in kwargs:
@@ -140,9 +133,9 @@ def encode(input_image, shape_type, output_path, **kwargs):
         global_mask = np.zeros(image_padded.shape[:2], dtype=np.uint8)
         triangles = []
         attempts = 0
-        max_attempts = num_triangles * 100  # Prevent infinite loops
+        max_attempts = num_triangles * 100
 
-        # ---- First pass: try with random sizes between min_size and max_size ----
+        # First pass: try with sizes between min_size and max_size.
         while len(triangles) < num_triangles and attempts < max_attempts:
             candidate = generate_random_triangle(image_padded.shape[:2], min_size, max_size)
             candidate_mask = np.zeros(image_padded.shape[:2], dtype=np.uint8)
@@ -153,7 +146,7 @@ def encode(input_image, shape_type, output_path, **kwargs):
                 global_mask = cv2.bitwise_or(global_mask, candidate_mask)
             attempts += 1
 
-        # ---- Second pass: if not enough triangles, try with fixed min_size ----
+        # Second pass: if not enough triangles, try with fixed min_size.
         attempts = 0
         while len(triangles) < num_triangles and attempts < max_attempts:
             candidate = generate_random_triangle(image_padded.shape[:2], min_size, min_size)
@@ -168,7 +161,7 @@ def encode(input_image, shape_type, output_path, **kwargs):
         if len(triangles) < num_triangles:
             st.warning(f"Only generated {len(triangles)} non-overlapping triangles out of {num_triangles} requested.")
 
-        # Create an overlay on the padded image by filling triangles with their average color.
+        # Create an overlay by filling each triangle with its average color.
         overlay_padded = image_padded.copy()
         for tri in triangles:
             mask = np.zeros(image_padded.shape[:2], dtype=np.uint8)
@@ -177,7 +170,7 @@ def encode(input_image, shape_type, output_path, **kwargs):
             avg_color = tuple(map(int, avg_color))
             cv2.fillConvexPoly(overlay_padded, tri, avg_color)
 
-        # Crop back to the original image size.
+        # Crop the padded overlay back to the original image dimensions.
         overlay_cropped = overlay_padded[padding:padding+image_resized.shape[0],
                                           padding:padding+image_resized.shape[1]]
         original_resized = image_resized.copy()
@@ -189,6 +182,7 @@ def encode(input_image, shape_type, output_path, **kwargs):
             triangles_cropped.append(tri_cropped)
         
         boundaries = triangles_cropped
+        # Here we use the cropped overlay as our encoded image.
         encoded_image = overlay_cropped.copy()
 
     elif shape_type in ['rectangle', 'rectangles']:
@@ -315,7 +309,9 @@ def encode(input_image, shape_type, output_path, **kwargs):
     else:
         raise ValueError("Unsupported shape type. Choose from 'triangles', 'rectangles', or 'circles'.")
 
-    # Create an encoding mask for boundaries.
+    # -----------------------------
+    # Encode boundary information into the blue channel's LSB.
+    # -----------------------------
     encode_mask = np.zeros(original_resized.shape[:2], dtype=np.uint8)
     if shape_type in ['triangle', 'triangles']:
         for tri in boundaries:
@@ -337,7 +333,7 @@ def encode(input_image, shape_type, output_path, **kwargs):
             else:
                 encoded_image_final[i, j, 0] = encoded_image_final[i, j, 0] & 254
 
-    # Add corner markers for validation (3x3 blocks in each corner)
+    # Add corner markers for validation (3x3 blocks in each corner).
     corner_size = 3
     h_img, w_img, _ = encoded_image_final.shape
     corner_positions = {
@@ -366,7 +362,7 @@ def encode(input_image, shape_type, output_path, **kwargs):
         return encoded_image_final, boundaries
 
 # -----------------------------
-# Modified Decode Function (with triangle branch replaced)
+# Modified Decode Function (triangle branch replaced)
 # -----------------------------
 def decode(encoded_image, shape_type, boundaries=None):
     shape_type = shape_type.lower()
