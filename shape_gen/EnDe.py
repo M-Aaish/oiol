@@ -114,7 +114,6 @@ def generate_random_triangle(image_shape, min_size, max_size):
 def encode(input_image, shape_type, output_path, **kwargs):
     shape_type = shape_type.lower()
     if shape_type in ['triangle', 'triangles']:
-        # Use triangle encode functionality from tri.py
         image_resized = cv2.resize(input_image, (500, 500))
         num_triangles = kwargs.get('num_triangles', kwargs.get('num_shapes', 50))
         if 'min_size' in kwargs and 'max_size' in kwargs:
@@ -127,7 +126,6 @@ def encode(input_image, shape_type, output_path, **kwargs):
             min_size = 20
             max_size = 100
 
-        # Pad the image so triangles near the edge can be fully generated.
         padding = max_size
         image_padded = cv2.copyMakeBorder(image_resized, padding, padding, padding, padding, cv2.BORDER_REFLECT)
         global_mask = np.zeros(image_padded.shape[:2], dtype=np.uint8)
@@ -161,7 +159,6 @@ def encode(input_image, shape_type, output_path, **kwargs):
         if len(triangles) < num_triangles:
             st.warning(f"Only generated {len(triangles)} non-overlapping triangles out of {num_triangles} requested.")
 
-        # Create an overlay by filling each triangle with its average color.
         overlay_padded = image_padded.copy()
         for tri in triangles:
             mask = np.zeros(image_padded.shape[:2], dtype=np.uint8)
@@ -170,7 +167,6 @@ def encode(input_image, shape_type, output_path, **kwargs):
             avg_color = tuple(map(int, avg_color))
             cv2.fillConvexPoly(overlay_padded, tri, avg_color)
 
-        # Crop the padded overlay back to the original image dimensions.
         overlay_cropped = overlay_padded[padding:padding+image_resized.shape[0],
                                           padding:padding+image_resized.shape[1]]
         original_resized = image_resized.copy()
@@ -182,7 +178,6 @@ def encode(input_image, shape_type, output_path, **kwargs):
             triangles_cropped.append(tri_cropped)
         
         boundaries = triangles_cropped
-        # Here we use the cropped overlay as our encoded image.
         encoded_image = overlay_cropped.copy()
 
     elif shape_type in ['rectangle', 'rectangles']:
@@ -364,7 +359,7 @@ def encode(input_image, shape_type, output_path, **kwargs):
 # -----------------------------
 # Modified Decode Function (triangle branch replaced)
 # -----------------------------
-def decode(encoded_image, shape_type, boundaries=None):
+def decode(encoded_image, shape_type, boundaries=None, **kwargs):
     shape_type = shape_type.lower()
     if encoded_image is None:
         st.error("Error: Encoded image is None.")
@@ -406,7 +401,22 @@ def decode(encoded_image, shape_type, boundaries=None):
     rgb_values = []
     annotated = encoded_image.copy()
     if shape_type in ['triangle', 'triangles']:
-        triangles = boundaries if boundaries is not None else []
+        triangles = []
+        if boundaries is not None:
+            triangles = boundaries
+        else:
+            ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
+            contours, _ = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+            max_size = kwargs.get('max_size', None)
+            for cnt in contours:
+                peri = cv2.arcLength(cnt, True)
+                approx = cv2.approxPolyDP(cnt, 0.04 * peri, True)
+                if len(approx) == 3:
+                    if max_size is not None:
+                        x, y, w_rect, h_rect = cv2.boundingRect(approx)
+                        if max(w_rect, h_rect) > max_size:
+                            continue
+                    triangles.append(approx.reshape(-1, 2))
         for tri in triangles:
             pts = np.int32(tri)
             cv2.polylines(annotated, [pts], isClosed=True, color=(0, 255, 0), thickness=1)
