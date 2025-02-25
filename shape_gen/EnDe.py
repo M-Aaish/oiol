@@ -407,36 +407,39 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
     rgb_values = []
     annotated = encoded_image.copy()
     if shape_type in ['triangle', 'triangles']:
-        if boundaries is None:
-            ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
-            contours, _ = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-            boundaries = []
-            min_size = kwargs.get('min_size', None)
-            max_size = kwargs.get('max_size', None)
-            for cnt in contours:
-                peri = cv2.arcLength(cnt, True)
-                approx = cv2.approxPolyDP(cnt, 0.04 * peri, True)
-                if len(approx) == 3:
-                    tri = approx.reshape(-1, 2)
-                    xs = tri[:, 0]
-                    ys = tri[:, 1]
-                    width = xs.max() - xs.min()
-                    height = ys.max() - ys.min()
-                    if min_size is not None:
-                        if width < min_size or height < min_size:
-                            continue
-                    if max_size is not None:
-                        if width > max_size or height > max_size:
-                            continue
-                    boundaries.append(tri)
-        for tri in boundaries:
-            pts = np.int32(tri)
-            cv2.polylines(annotated, [pts], isClosed=True, color=(0, 255, 0), thickness=1)
-            center = np.mean(tri, axis=0)
-            center_x = int(np.clip(center[0], 0, w - 1))
-            center_y = int(np.clip(center[1], 0, h - 1))
-            b, g, r = encoded_image[center_y, center_x]
-            rgb_values.append([r, g, b])
+    if boundaries is None:
+        ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
+        # Apply a small dilation to join any broken edges from the one-pixel lines.
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        dilated = cv2.dilate(thresh, kernel, iterations=1)
+        # Use RETR_EXTERNAL to get the full external contour of each triangle.
+        contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        boundaries = []
+        min_size = kwargs.get('min_size', None)
+        max_size = kwargs.get('max_size', None)
+        for cnt in contours:
+            peri = cv2.arcLength(cnt, True)
+            approx = cv2.approxPolyDP(cnt, 0.04 * peri, True)
+            if len(approx) == 3:
+                tri = approx.reshape(-1, 2)
+                xs = tri[:, 0]
+                ys = tri[:, 1]
+                width = xs.max() - xs.min()
+                height = ys.max() - ys.min()
+                if min_size is not None and (width < min_size or height < min_size):
+                    continue
+                if max_size is not None and (width > max_size or height > max_size):
+                    continue
+                boundaries.append(tri)
+    for tri in boundaries:
+        pts = np.int32(tri)
+        cv2.polylines(annotated, [pts], isClosed=True, color=(0, 255, 0), thickness=1)
+        center = np.mean(tri, axis=0)
+        center_x = int(np.clip(center[0], 0, w - 1))
+        center_y = int(np.clip(center[1], 0, h - 1))
+        b, g, r = encoded_image[center_y, center_x]
+        rgb_values.append([r, g, b])
+
     elif shape_type in ['rectangle', 'rectangles']:
         ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
