@@ -407,40 +407,51 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
     rgb_values = []
     annotated = encoded_image.copy()
     if shape_type in ['triangle', 'triangles']:
-        if boundaries is None:
-            ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
-        # Strengthen and join the one-pixel triangle boundaries:
-            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-            dilated = cv2.dilate(thresh, kernel, iterations=2)
-            closed = cv2.morphologyEx(dilated, cv2.MORPH_CLOSE, kernel, iterations=1)
-        # Retrieve only external contours for clear triangle shapes.
-            contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            boundaries = []
-            min_size = kwargs.get('min_size', None)
-            max_size = kwargs.get('max_size', None)
-            for cnt in contours:
-                peri = cv2.arcLength(cnt, True)
-            # Use a smaller epsilon factor to capture the triangle shape better.
-                approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
-                if len(approx) == 3:
-                    tri = approx.reshape(-1, 2)
-                    xs = tri[:, 0]
-                    ys = tri[:, 1]
-                    width = xs.max() - xs.min()
-                    height = ys.max() - ys.min()
-                    if min_size is not None and (width < min_size or height < min_size):
+    if boundaries is None:
+        # Threshold the LSB image
+        ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
+        
+        # ---- ADD THESE LINES (Morphological Close) ----
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+        closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
+        # Now find contours on 'closed' instead of 'thresh'
+        contours, _ = cv2.findContours(closed, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        # ------------------------------------------------
+        
+        boundaries = []
+        min_size = kwargs.get('min_size', None)
+        max_size = kwargs.get('max_size', None)
+        
+        for cnt in contours:
+            peri = cv2.arcLength(cnt, True)
+            approx = cv2.approxPolyDP(cnt, 0.04 * peri, True)
+            if len(approx) == 3:
+                tri = approx.reshape(-1, 2)
+                xs = tri[:, 0]
+                ys = tri[:, 1]
+                width = xs.max() - xs.min()
+                height = ys.max() - ys.min()
+
+                # Check optional min_size / max_size
+                if min_size is not None:
+                    if width < min_size or height < min_size:
                         continue
-                    if max_size is not None and (width > max_size or height > max_size):
+                if max_size is not None:
+                    if width > max_size or height > max_size:
                         continue
-                    boundaries.append(tri)
-        for tri in boundaries:
-            pts = np.int32(tri)
-            cv2.polylines(annotated, [pts], isClosed=True, color=(0, 255, 0), thickness=1)
-            center = np.mean(tri, axis=0)
-            center_x = int(np.clip(center[0], 0, w - 1))
-            center_y = int(np.clip(center[1], 0, h - 1))
-            b, g, r = encoded_image[center_y, center_x]
-            rgb_values.append([r, g, b])
+
+                boundaries.append(tri)
+
+    # The rest of your existing code for drawing/annotating the triangles remains unchanged.
+    for tri in boundaries:
+        pts = np.int32(tri)
+        cv2.polylines(annotated, [pts], isClosed=True, color=(0, 255, 0), thickness=1)
+        center = np.mean(tri, axis=0)
+        center_x = int(np.clip(center[0], 0, w - 1))
+        center_y = int(np.clip(center[1], 0, h - 1))
+        b, g, r = encoded_image[center_y, center_x]
+        rgb_values.append([r, g, b])
+
    
 
     elif shape_type in ['rectangle', 'rectangles']:
