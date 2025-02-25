@@ -180,18 +180,152 @@ def encode(input_image, shape_type, output_path, **kwargs):
         
         boundaries = triangles_cropped
         encoded_image = overlay_cropped.copy()
+    elif shape_type in ['rectangle', 'rectangles']:
+        image_orig = input_image
+        image_resized = cv2.resize(image_orig, (256, 256))
+        h, w, _ = image_resized.shape
+        num_rectangles = kwargs.get('num_shapes', 653)
+        if 'min_size' in kwargs and 'max_size' in kwargs:
+            min_size_val = kwargs['min_size']
+            max_size_val = kwargs['max_size']
+        elif 'shape_size' in kwargs:
+            min_size_val = kwargs['shape_size']
+            max_size_val = kwargs['shape_size']
+        else:
+            min_size_val = 5
+            max_size_val = 10
+        boundaries_max = []
+        attempts = 0
+        failed_attempts = 0
+        max_attempts = kwargs.get('max_attempts', 500000)
+        max_fail_attempts = kwargs.get('max_fail_attempts', 10000)
+        while attempts < max_attempts and failed_attempts < max_fail_attempts and len(boundaries_max) < num_rectangles:
+            x = random.randint(0, w - max_size_val)
+            y = random.randint(0, h - max_size_val)
+            width = max_size_val
+            height = max_size_val
+            too_close = False
+            for (rx, ry, rw, rh) in boundaries_max:
+                if rx < x + width and rx + rw > x and ry < y + height and ry + rh > y:
+                    too_close = True
+                    break
+            if not too_close:
+                boundaries_max.append((x, y, width, height))
+                failed_attempts = 0
+            else:
+                failed_attempts += 1
+            attempts += 1
+        if len(boundaries_max) < num_rectangles:
+            remaining = num_rectangles - len(boundaries_max)
+            boundaries_min = []
+            attempts = 0
+            failed_attempts = 0
+            while attempts < max_attempts and failed_attempts < max_fail_attempts and len(boundaries_min) < remaining:
+                x = random.randint(0, w - min_size_val)
+                y = random.randint(0, h - min_size_val)
+                width = min_size_val
+                height = min_size_val
+                too_close = False
+                for (rx, ry, rw, rh) in boundaries_max + boundaries_min:
+                    if rx < x + width and rx + rw > x and ry < y + height and ry + rh > y:
+                        too_close = True
+                        break
+                if not too_close:
+                    boundaries_min.append((x, y, width, height))
+                    failed_attempts = 0
+                else:
+                    failed_attempts += 1
+                attempts += 1
+            boundaries_final = boundaries_max + boundaries_min
+        else:
+            boundaries_final = boundaries_max
+        img_mask = np.zeros((h, w), dtype=np.uint8)
+        for (x, y, width, height) in boundaries_final:
+            cv2.rectangle(img_mask, (x, y), (x + width, y + height), 255, thickness=-1)
+        output_mask = np.zeros((h, w, 4), dtype=np.uint8)
+        for (x, y, width, height) in boundaries_final:
+            mask = np.zeros((h, w), dtype=np.uint8)
+            mask[y:y + height, x:x + width] = 255
+            rect_pixels = image_resized[mask == 255]
+            if len(rect_pixels) > 0:
+                average_value = np.mean(rect_pixels, axis=0)
+            else:
+                average_value = [0, 0, 0]
+            output_mask[mask == 255] = np.append(average_value, [255])
+        overlay_img = image_resized.copy()
+        mask_alpha = output_mask[:, :, 3] / 255.0
+        for c in range(3):
+            overlay_img[:, :, c] = (1 - mask_alpha) * image_resized[:, :, c] + mask_alpha * output_mask[:, :, c]
+        original_resized = image_resized
+        boundaries = boundaries_final
+        encoded_image = overlay_img
+    elif shape_type in ['circle', 'circles']:
+        image_orig = input_image
+        image_resized = cv2.resize(image_orig, (512, 512))
+        h, w, _ = image_resized.shape
+        num_circles = kwargs.get('num_shapes', kwargs.get('max_circles_limit', 1900))
+        if 'min_radius' in kwargs and 'max_radius' in kwargs:
+            min_radius_val = kwargs['min_radius']
+            max_radius_val = kwargs['max_radius']
+        elif 'shape_size' in kwargs:
+            min_radius_val = kwargs['shape_size']
+            max_radius_val = kwargs['shape_size']
+        else:
+            min_radius_val = 5
+            max_radius_val = 10
+        circle_image_max, num_generated_max, circles_max = generate_max_random_circles(
+            image_size=(h, w),
+            max_attempts=kwargs.get('max_attempts', 10000),
+            max_fail_attempts=kwargs.get('max_fail_attempts', 10000),
+            max_circles_limit=num_circles,
+            min_radius=max_radius_val,
+            max_radius=max_radius_val
+        )
+        circles_final = circles_max.copy()
+        if len(circles_final) < num_circles:
+            remaining = num_circles - len(circles_final)
+            circles_min = []
+            attempts = 0
+            failed_attempts = 0
+            max_attempts = kwargs.get('max_attempts', 10000)
+            max_fail_attempts = kwargs.get('max_fail_attempts', 10000)
+            while attempts < max_attempts and failed_attempts < max_fail_attempts and len(circles_min) < remaining:
+                radius = min_radius_val
+                x = random.randint(radius, w - radius)
+                y = random.randint(radius, h - radius)
+                candidate = (x, y, radius)
+                overlap = False
+                for (cx, cy, cr) in circles_final + circles_min:
+                    if np.sqrt((x - cx)**2 + (y - cy)**2) <= (radius + cr):
+                        overlap = True
+                        break
+                if not overlap:
+                    circles_min.append(candidate)
+                    failed_attempts = 0
+                else:
+                    failed_attempts += 1
+                attempts += 1
+            circles_final = circles_final + circles_min
+        resized_circle_image = resize_image_to_shape(circle_image_max, image_resized.shape[:2])
+        averaged_circle_image = compute_average_under_circles(image_resized, resized_circle_image, circles_final)
+        overlay_img = overlay_mask_on_image(image_resized, averaged_circle_image)
+        original_resized = image_resized
+        boundaries = circles_final
+        encoded_image = overlay_img
     else:
-        st.error("Only the triangle shape is supported in this demo.")
-        return None, None
+        raise ValueError("Unsupported shape type. Choose from 'triangles', 'rectangles', or 'circles'.")
 
-    # -----------------------------
-    # Encode the boundaries into the blue channel's LSB
-    # -----------------------------
     encode_mask = np.zeros(original_resized.shape[:2], dtype=np.uint8)
-    for tri in boundaries:
-        cv2.polylines(encode_mask, [tri], isClosed=True, color=255, thickness=1)
-    
-    # Combine the overlay with the original image based on the boundary mask.
+    if shape_type in ['triangle', 'triangles']:
+        for tri in boundaries:
+            cv2.polylines(encode_mask, [np.int32(tri)], isClosed=True, color=255, thickness=1)
+    elif shape_type in ['rectangle', 'rectangles']:
+        for (x, y, width, height) in boundaries:
+            cv2.rectangle(encode_mask, (x, y), (x + width, y + height), 255, thickness=1)
+    elif shape_type in ['circle', 'circles']:
+        for (cx, cy, radius) in boundaries:
+            cv2.circle(encode_mask, (cx, cy), radius, 255, thickness=1)
+
     final_encoded = encoded_image.copy()
     for i in range(final_encoded.shape[0]):
         for j in range(final_encoded.shape[1]):
@@ -201,9 +335,6 @@ def encode(input_image, shape_type, output_path, **kwargs):
             else:
                 final_encoded[i, j, 0] = final_encoded[i, j, 0] & 254
 
-    # -----------------------------
-    # Add corner markers for validation (3x3 blocks in each corner)
-    # -----------------------------
     corner_size = 3
     h_img, w_img, _ = final_encoded.shape
     corner_positions = {
@@ -226,11 +357,14 @@ def encode(input_image, shape_type, output_path, **kwargs):
                 final_encoded[i, j, 1] = (final_encoded[i, j, 1] & 254) | exp_g
                 final_encoded[i, j, 2] = (final_encoded[i, j, 2] & 254) | exp_r
 
-    return final_encoded, boundaries
+    if shape_type in ['circle', 'circles']:
+        return final_encoded, boundaries
+    else:
+        return final_encoded, boundaries
 
-# -----------------------------
+# ---------------
 # Modified decode function with updated triangle detection and size filtering
-# -----------------------------
+# ---------------
 def decode(encoded_image, shape_type, boundaries=None, **kwargs):
     shape_type = shape_type.lower()
     if encoded_image is None:
@@ -273,26 +407,27 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
     rgb_values = []
     annotated = encoded_image.copy()
     if shape_type in ['triangle', 'triangles']:
-        # If no boundaries provided, detect triangles using thresholded contours.
         if boundaries is None:
             ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
-            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            contours, _ = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
             boundaries = []
             min_size = kwargs.get('min_size', None)
             max_size = kwargs.get('max_size', None)
             for cnt in contours:
                 peri = cv2.arcLength(cnt, True)
-                approx = cv2.approxPolyDP(cnt, 0.04 * peri, True)  # Adjusted factor from 0.02 to 0.04
+                approx = cv2.approxPolyDP(cnt, 0.04 * peri, True)
                 if len(approx) == 3:
                     tri = approx.reshape(-1, 2)
                     xs = tri[:, 0]
                     ys = tri[:, 1]
                     width = xs.max() - xs.min()
                     height = ys.max() - ys.min()
-                    if min_size is not None and (width < min_size or height < min_size):
-                        continue
-                    if max_size is not None and (width > max_size or height > max_size):
-                        continue
+                    if min_size is not None:
+                        if width < min_size or height < min_size:
+                            continue
+                    if max_size is not None:
+                        if width > max_size or height > max_size:
+                            continue
                     boundaries.append(tri)
         for tri in boundaries:
             pts = np.int32(tri)
@@ -312,10 +447,12 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
         for cnt in contours:
             x, y, w_rect, h_rect = cv2.boundingRect(cnt)
             if w_rect > 1 and h_rect > 1:
-                if min_size is not None and (w_rect < min_size or h_rect < min_size):
-                    continue
-                if max_size is not None and (w_rect > max_size or h_rect > max_size):
-                    continue
+                if min_size is not None:
+                    if w_rect < min_size or h_rect < min_size:
+                        continue
+                if max_size is not None:
+                    if w_rect > max_size or h_rect > max_size:
+                        continue
                 cv2.rectangle(annotated, (x, y), (x + w_rect, y + h_rect), (0, 255, 0), 1)
                 center_x = x + w_rect // 2
                 center_y = y + h_rect // 2
@@ -330,10 +467,12 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
             (x, y), radius = cv2.minEnclosingCircle(cnt)
             center = (int(x), int(y))
             radius = int(radius)
-            if min_size is not None and (radius < min_size):
-                continue
-            if max_size is not None and (radius > max_size):
-                continue
+            if min_size is not None:
+                if radius < min_size:
+                    continue
+            if max_size is not None:
+                if radius > max_size:
+                    continue
             if radius > 3 and radius < 250:
                 cv2.circle(annotated, center, radius, (0, 255, 0), 1)
                 b, g, r = encoded_image[center[1], center[0]]
