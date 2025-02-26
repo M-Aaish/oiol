@@ -406,49 +406,33 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
         binary_image = cv2.dilate(binary_image, kernel, iterations=1)
     rgb_values = []
     annotated = encoded_image.copy()
+
     if shape_type in ['triangle', 'triangles']:
-        if boundaries is None:
-        # 1) Threshold the extracted LSB image
+        # If no boundaries were provided (or the list is empty), detect triangles from contours.
+        if boundaries is None or len(boundaries) == 0:
             ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
-
-        # 2) Make the boundary thicker (dilate), then close small gaps
-            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-            dilated = cv2.dilate(thresh, kernel, iterations=1)
-            closed = cv2.morphologyEx(dilated, cv2.MORPH_CLOSE, kernel, iterations=1)
-
-        # 3) Find contours on the processed mask
-            contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-            boundaries = []
+            contours, _ = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+            triangles = []
             min_size = kwargs.get('min_size', None)
             max_size = kwargs.get('max_size', None)
-
-        # 4) Approximate contours to polygons; filter only triangles
             for cnt in contours:
-            # Skip very tiny/noisy contours
-                if cv2.contourArea(cnt) < 5:
-                    continue
-
                 peri = cv2.arcLength(cnt, True)
-                approx = cv2.approxPolyDP(cnt, 0.03 * peri, True)  # slightly smaller epsilon than 0.04
+                approx = cv2.approxPolyDP(cnt, 0.04 * peri, True)
                 if len(approx) == 3:
                     tri = approx.reshape(-1, 2)
                     xs = tri[:, 0]
                     ys = tri[:, 1]
                     width = xs.max() - xs.min()
                     height = ys.max() - ys.min()
-
-                # Check optional min_size / max_size constraints
                     if min_size is not None:
                         if width < min_size or height < min_size:
                             continue
                     if max_size is not None:
                         if width > max_size or height > max_size:
                             continue
+                    triangles.append(tri)
+            boundaries = triangles
 
-                    boundaries.append(tri)
-
-    # 5) Draw/annotate the triangles we found
         for tri in boundaries:
             pts = np.int32(tri)
             cv2.polylines(annotated, [pts], isClosed=True, color=(0, 255, 0), thickness=1)
@@ -463,17 +447,9 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
         closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
         contours, _ = cv2.findContours(closed, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-        min_size = kwargs.get('min_size', None)
-        max_size = kwargs.get('max_size', None)
         for cnt in contours:
             x, y, w_rect, h_rect = cv2.boundingRect(cnt)
             if w_rect > 1 and h_rect > 1:
-                if min_size is not None:
-                    if w_rect < min_size or h_rect < min_size:
-                        continue
-                if max_size is not None:
-                    if w_rect > max_size or h_rect > max_size:
-                        continue
                 cv2.rectangle(annotated, (x, y), (x + w_rect, y + h_rect), (0, 255, 0), 1)
                 center_x = x + w_rect // 2
                 center_y = y + h_rect // 2
@@ -482,23 +458,15 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
     elif shape_type in ['circle', 'circles']:
         ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
         contours, _ = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-        min_size = kwargs.get('min_size', None)
-        max_size = kwargs.get('max_size', None)
         for cnt in contours:
             (x, y), radius = cv2.minEnclosingCircle(cnt)
             center = (int(x), int(y))
             radius = int(radius)
-            if min_size is not None:
-                if radius < min_size:
-                    continue
-            if max_size is not None:
-                if radius > max_size:
-                    continue
             if radius > 3 and radius < 250:
                 cv2.circle(annotated, center, radius, (0, 255, 0), 1)
                 b, g, r = encoded_image[center[1], center[0]]
                 rgb_values.append([r, g, b])
     else:
         st.error("Unsupported shape type for decoding.")
-    
+
     return binary_image, annotated, rgb_values
