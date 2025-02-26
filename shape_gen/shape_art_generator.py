@@ -82,7 +82,7 @@ def draw_random_triangles(image, min_size, max_size, num_triangles):
 
 def main_page():
     """ Main UI for Shape Art Generator """
-    st.title("Shape Art Generator")
+    st.title("Foogle Man Repo")
 
     uploaded_file = st.file_uploader("Upload an Image", type=["jpg", "jpeg", "png", "webp"])
 
