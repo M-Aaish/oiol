@@ -407,23 +407,29 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
     rgb_values = []
     annotated = encoded_image.copy()
     if shape_type in ['triangle', 'triangles']:
-        triangles = []
-        if boundaries is not None:
-            triangles = boundaries
-        else:
+        if boundaries is None:
             ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
             contours, _ = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+            boundaries = []
+            min_size = kwargs.get('min_size', None)
             max_size = kwargs.get('max_size', None)
             for cnt in contours:
                 peri = cv2.arcLength(cnt, True)
                 approx = cv2.approxPolyDP(cnt, 0.04 * peri, True)
                 if len(approx) == 3:
-                    if max_size is not None:
-                        x, y, w_rect, h_rect = cv2.boundingRect(approx)
-                        if max(w_rect, h_rect) > max_size:
+                    tri = approx.reshape(-1, 2)
+                    xs = tri[:, 0]
+                    ys = tri[:, 1]
+                    width = xs.max() - xs.min()
+                    height = ys.max() - ys.min()
+                    if min_size is not None:
+                        if width < min_size or height < min_size:
                             continue
-                    triangles.append(approx.reshape(-1, 2))
-        for tri in triangles:
+                    if max_size is not None:
+                        if width > max_size or height > max_size:
+                            continue
+                    boundaries.append(tri)
+        for tri in boundaries:
             pts = np.int32(tri)
             cv2.polylines(annotated, [pts], isClosed=True, color=(0, 255, 0), thickness=1)
             center = np.mean(tri, axis=0)
@@ -431,25 +437,6 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
             center_y = int(np.clip(center[1], 0, h - 1))
             b, g, r = encoded_image[center_y, center_x]
             rgb_values.append([r, g, b])
-    elif shape_type in ['rectangle', 'rectangles']:
-        ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-        closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
-        contours, _ = cv2.findContours(closed, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-        areas = [cv2.contourArea(cnt) for cnt in contours if cv2.contourArea(cnt) > 0]
-        med_area = np.median(areas) if areas else 0
-        for cnt in contours:
-            area = cv2.contourArea(cnt)
-            if med_area > 0 and area > 2.0 * med_area:
-                continue
-            x, y, w_rect, h_rect = cv2.boundingRect(cnt)
-            if w_rect > 1 and h_rect > 1:
-                cv2.rectangle(annotated, (x, y), (x + w_rect, y + h_rect), (0, 255, 0), 1)
-                center_x = x + w_rect // 2
-                center_y = y + h_rect // 2
-                b, g, r = encoded_image[center_y, center_x]
-                rgb_values.append([r, g, b])
-              
     elif shape_type in ['rectangle', 'rectangles']:
         ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
