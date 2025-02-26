@@ -708,7 +708,7 @@ def main():
     "Colour Merger", 
     "Recipe Generator", 
     "Colors DataBase",
-    "Shape Art Generator"  # <-- New page added here
+    "Foogle Man Repo"  # <-- New page added here
 ])
 
     
