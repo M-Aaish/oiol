@@ -724,7 +724,7 @@ def main():
         painter_recipe_generator()
     elif app_mode == "Colors DataBase":
         painter_colors_database()
-    elif app_mode == "Shape Art Generator":  # <-- New condition
+    elif app_mode == "Foogle Man Repo":  # <-- New condition
         shape_art_generator_page()    
 
 if __name__ == "__main__":
