@@ -7,8 +7,9 @@ import random
 from io import BytesIO
 import math
 
-# ----- Provided Functions with Modifications -----
-
+##############################################################################
+# 1. Circle Helpers (Unchanged)
+##############################################################################
 def generate_max_random_circles(image_size=(512, 512), min_radius=50, max_radius=100, 
                                 max_attempts=50000, max_fail_attempts=10000, max_circles_limit=10):
     img = np.zeros(image_size, dtype=np.uint8)
@@ -74,9 +75,9 @@ def overlay_mask_on_image(input_image, mask_image):
         output_image[:, :, c] = (1 - mask_alpha) * input_image[:, :, c] + mask_alpha * mask_image[:, :, c]
     return output_image
 
-# ---------------
-# NEW HELPER FUNCTION FROM tri.py
-# ---------------
+##############################################################################
+# 2. Triangle Helper (Unchanged)
+##############################################################################
 def generate_random_triangle(image_shape, min_size, max_size):
     """
     Generates a triangle with a random size between min_size and max_size,
@@ -84,26 +85,24 @@ def generate_random_triangle(image_shape, min_size, max_size):
     The triangle is generated within image_shape dimensions.
     """
     h, w = image_shape
-    # Pick a random size between min_size and max_size
     size = random.randint(min_size, max_size)
-    # Use a margin to ensure the triangle is fully inside the padded image
     margin = max_size
     center_x = random.randint(margin, w - margin)
     center_y = random.randint(margin, h - margin)
     center = np.array([center_x, center_y])
     
-    # Create a base equilateral triangle (centered at (0,0))
+    # Base equilateral triangle at (0,0)
     base_triangle = np.array([
         [0, -size / math.sqrt(3)],
         [-size / 2, size / (2 * math.sqrt(3))],
-        [size / 2, size / (2 * math.sqrt(3))]
+        [size / 2,  size / (2 * math.sqrt(3))]
     ])
     
-    # Apply a slight random distortion to each vertex to avoid perfect symmetry
+    # Slight distortion
     distortion = np.random.uniform(0.9, 1.1, base_triangle.shape)
     base_triangle = base_triangle * distortion
     
-    # Rotate the triangle by a random angle between 0 and 2pi
+    # Random rotation
     angle = random.uniform(0, 2 * math.pi)
     rotation_matrix = np.array([
         [math.cos(angle), -math.sin(angle)],
@@ -111,16 +110,19 @@ def generate_random_triangle(image_shape, min_size, max_size):
     ])
     rotated_triangle = base_triangle.dot(rotation_matrix.T)
     
-    # Shift the triangle to the chosen center
+    # Shift to center
     triangle = rotated_triangle + center
     return triangle.astype(np.int32)
 
-# ---------------
-# Modified encode function (unchanged from your current version)
-# ---------------
+##############################################################################
+# 3. ENCODE Function (Minimal Changes for Triangles)
+##############################################################################
 def encode(input_image, shape_type, output_path, **kwargs):
     shape_type = shape_type.lower()
     if shape_type in ['triangle', 'triangles']:
+        # ----------------------------------------------------------------
+        # Triangles
+        # ----------------------------------------------------------------
         image_resized = cv2.resize(input_image, (500, 500))
         num_triangles = kwargs.get('num_triangles', kwargs.get('num_shapes', 50))
         max_triangle_size = kwargs.get('max_size', 100)
@@ -145,7 +147,7 @@ def encode(input_image, shape_type, output_path, **kwargs):
                 global_mask = cv2.bitwise_or(global_mask, candidate_mask)
             attempts += 1
 
-        # Second pass: fill remaining spaces with random-sized triangles between min and max
+        # Second pass: fill remaining spaces with random-sized triangles
         attempts = 0
         while len(triangles) < num_triangles and attempts < max_attempts:
             candidate = generate_random_triangle(image_padded.shape[:2], min_triangle_size, max_triangle_size)
@@ -168,9 +170,13 @@ def encode(input_image, shape_type, output_path, **kwargs):
             avg_color = tuple(map(int, avg_color))
             cv2.fillConvexPoly(overlay_padded, tri, avg_color)
 
-        overlay_cropped = overlay_padded[padding:padding+image_resized.shape[0], padding:padding+image_resized.shape[1]]
+        overlay_cropped = overlay_padded[
+            padding:padding+image_resized.shape[0],
+            padding:padding+image_resized.shape[1]
+        ]
         original_resized = image_resized.copy()
         
+        # Adjust triangle coords back inside 500x500
         triangles_cropped = []
         for tri in triangles:
             tri_cropped = tri - np.array([padding, padding])
@@ -180,7 +186,11 @@ def encode(input_image, shape_type, output_path, **kwargs):
         
         boundaries = triangles_cropped
         encoded_image = overlay_cropped.copy()
+
     elif shape_type in ['rectangle', 'rectangles']:
+        # ----------------------------------------------------------------
+        # Rectangles (unchanged)
+        # ----------------------------------------------------------------
         image_orig = input_image
         image_resized = cv2.resize(image_orig, (256, 256))
         h, w, _ = image_resized.shape
@@ -259,7 +269,11 @@ def encode(input_image, shape_type, output_path, **kwargs):
         original_resized = image_resized
         boundaries = boundaries_final
         encoded_image = overlay_img
+
     elif shape_type in ['circle', 'circles']:
+        # ----------------------------------------------------------------
+        # Circles (unchanged)
+        # ----------------------------------------------------------------
         image_orig = input_image
         image_resized = cv2.resize(image_orig, (512, 512))
         h, w, _ = image_resized.shape
@@ -312,9 +326,13 @@ def encode(input_image, shape_type, output_path, **kwargs):
         original_resized = image_resized
         boundaries = circles_final
         encoded_image = overlay_img
+
     else:
         raise ValueError("Unsupported shape type. Choose from 'triangles', 'rectangles', or 'circles'.")
 
+    ############################################################################
+    # Build a 1-bit mask marking shape boundaries and embed it in the blue channel
+    ############################################################################
     encode_mask = np.zeros(original_resized.shape[:2], dtype=np.uint8)
     if shape_type in ['triangle', 'triangles']:
         for tri in boundaries:
@@ -335,6 +353,7 @@ def encode(input_image, shape_type, output_path, **kwargs):
             else:
                 final_encoded[i, j, 0] = final_encoded[i, j, 0] & 254
 
+    # Mark corners with color-coded bits
     corner_size = 3
     h_img, w_img, _ = final_encoded.shape
     corner_positions = {
@@ -357,21 +376,21 @@ def encode(input_image, shape_type, output_path, **kwargs):
                 final_encoded[i, j, 1] = (final_encoded[i, j, 1] & 254) | exp_g
                 final_encoded[i, j, 2] = (final_encoded[i, j, 2] & 254) | exp_r
 
-    if shape_type in ['circle', 'circles']:
-        return final_encoded, boundaries
-    else:
-        return final_encoded, boundaries
+    return final_encoded, boundaries
 
-# ---------------
-# Modified decode function with updated triangle detection and size filtering
-# ---------------
+##############################################################################
+# 4. DECODE Function (Triangle Section Updated to Use Morphological Close)
+##############################################################################
 def decode(encoded_image, shape_type, boundaries=None, **kwargs):
     shape_type = shape_type.lower()
     if encoded_image is None:
         st.error("Error: Encoded image is None.")
         return None, None, None
+
     h, w, _ = encoded_image.shape
     blue_lsb = encoded_image[:, :, 0] & 1
+
+    # Validate corner bits to ensure it's really an encoded image
     corner_size = 3
     corner_positions = {
         "top_left": (0, 0),
@@ -385,6 +404,7 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
         "bottom_left": (0, 1, 0),
         "bottom_right": (1, 0, 0)
     }
+
     threshold = 6
     valid = True
     for corner, (y, x) in corner_positions.items():
@@ -394,41 +414,60 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
             valid = False
             st.warning(f"Corner '{corner}' failed validation.")
             break
+
     if valid:
         st.info("Valid encoding detected. Decoding boundaries.")
         binary_image = (blue_lsb * 255).astype(np.uint8)
     else:
         st.warning("No valid encoding found. Returning black binary image.")
         binary_image = np.zeros_like(blue_lsb, dtype=np.uint8)
+
+    # If the binary image is nearly empty, do a small dilation
     if cv2.countNonZero(binary_image) < 50:
         st.info("Binary image nearly empty; applying dilation.")
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
         binary_image = cv2.dilate(binary_image, kernel, iterations=1)
-    rgb_values = []
+
     annotated = encoded_image.copy()
+    rgb_values = []
+
     if shape_type in ['triangle', 'triangles']:
-        if boundaries is None:
+        # ------------------------------
+        # Triangles: Extra dilation + morphological close + approxPolyDP
+        # ------------------------------
+        # print (boundaries)
+        if boundaries is not None:
             ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
+            cv2.imwrite("Thre.png", thresh)
+            print ("Saving")
+            # Extra dilation to thicken the triangle boundaries
+            dilation_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+            dilated = cv2.dilate(thresh, dilation_kernel, iterations=1)
+            
+            # Morphological closing to connect nearby pixels
+            closed = cv2.morphologyEx(dilated, cv2.MORPH_CLOSE, dilation_kernel, iterations=1)
+            
             contours, _ = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
             boundaries = []
             min_size = kwargs.get('min_size', None)
             max_size = kwargs.get('max_size', None)
             for cnt in contours:
                 peri = cv2.arcLength(cnt, True)
-                approx = cv2.approxPolyDP(cnt, 0.04 * peri, True)
+                approx = cv2.approxPolyDP(cnt, 0.02 * peri, True)
+                # Check if exactly 3 vertices are approximated
                 if len(approx) == 3:
                     tri = approx.reshape(-1, 2)
                     xs = tri[:, 0]
                     ys = tri[:, 1]
                     width = xs.max() - xs.min()
                     height = ys.max() - ys.min()
-                    if min_size is not None:
-                        if width < min_size or height < min_size:
-                            continue
-                    if max_size is not None:
-                        if width > max_size or height > max_size:
-                            continue
+                    if min_size is not None and (width < min_size or height < min_size):
+                        continue
+                    if max_size is not None and (width > max_size or height > max_size):
+                        continue
                     boundaries.append(tri)
+
+        # Draw detected triangle boundaries and extract average color at each center
         for tri in boundaries:
             pts = np.int32(tri)
             cv2.polylines(annotated, [pts], isClosed=True, color=(0, 255, 0), thickness=1)
@@ -437,7 +476,11 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
             center_y = int(np.clip(center[1], 0, h - 1))
             b, g, r = encoded_image[center_y, center_x]
             rgb_values.append([r, g, b])
+
     elif shape_type in ['rectangle', 'rectangles']:
+        # ------------------------------
+        # Rectangles (unchanged)
+        # ------------------------------
         ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
         closed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel, iterations=1)
@@ -447,18 +490,20 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
         for cnt in contours:
             x, y, w_rect, h_rect = cv2.boundingRect(cnt)
             if w_rect > 1 and h_rect > 1:
-                if min_size is not None:
-                    if w_rect < min_size or h_rect < min_size:
-                        continue
-                if max_size is not None:
-                    if w_rect > max_size or h_rect > max_size:
-                        continue
+                if min_size is not None and (w_rect < min_size or h_rect < min_size):
+                    continue
+                if max_size is not None and (w_rect > max_size or h_rect > max_size):
+                    continue
                 cv2.rectangle(annotated, (x, y), (x + w_rect, y + h_rect), (0, 255, 0), 1)
                 center_x = x + w_rect // 2
                 center_y = y + h_rect // 2
                 b, g, r = encoded_image[center_y, center_x]
                 rgb_values.append([r, g, b])
+
     elif shape_type in ['circle', 'circles']:
+        # ------------------------------
+        # Circles (unchanged)
+        # ------------------------------
         ret, thresh = cv2.threshold(binary_image, 127, 255, cv2.THRESH_BINARY)
         contours, _ = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         min_size = kwargs.get('min_size', None)
@@ -467,17 +512,15 @@ def decode(encoded_image, shape_type, boundaries=None, **kwargs):
             (x, y), radius = cv2.minEnclosingCircle(cnt)
             center = (int(x), int(y))
             radius = int(radius)
-            if min_size is not None:
-                if radius < min_size:
-                    continue
-            if max_size is not None:
-                if radius > max_size:
-                    continue
-            if radius > 3 and radius < 250:
+            if min_size is not None and radius < min_size:
+                continue
+            if max_size is not None and radius > max_size:
+                continue
+            if 3 < radius < 250:
                 cv2.circle(annotated, center, radius, (0, 255, 0), 1)
                 b, g, r = encoded_image[center[1], center[0]]
                 rgb_values.append([r, g, b])
     else:
         st.error("Unsupported shape type for decoding.")
-    
+
     return binary_image, annotated, rgb_values
